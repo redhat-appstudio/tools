@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 
+"""Initialize and use a compose generator using ODCS"""
+
+from .compose_generator import ComposeGenerator
+from .odcs_configurations_generator import ODCSConfigurationsGenerator
 from .odcs_fetcher import ODCSFetcher
 from .odcs_requester import ODCSRequester
-from .odcs_configurations_generator import ODCSConfigurationsGenerator
-from .compose_generator import ComposeGenerator
 
 
 def main():
