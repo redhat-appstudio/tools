@@ -1,7 +1,7 @@
 #!/bin/bash -ex
 
 main() {
-    local pkgs=("tests" "compose_generator")
+    local pkgs=("tests" "generate_compose")
     pipenv run isort --profile black "${pkgs[@]}"
     pipenv run black "${pkgs[@]}"
 }
