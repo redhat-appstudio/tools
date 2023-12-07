@@ -1,4 +1,7 @@
+"""compose generator protocols"""
 from typing import Protocol
+
+# pylint: disable=too-few-public-methods
 
 
 class ComposeConfigurations(Protocol):
@@ -11,6 +14,7 @@ class ComposeConfigurationsGenerator(Protocol):
     """
     Generate compose configurations
     """
+
     def __call__(self) -> ComposeConfigurations:
         pass
 
@@ -25,6 +29,7 @@ class ComposeRequester(Protocol):
     """
     Given compose configurations, return a remote compose reference
     """
+
     def __call__(self, configs: ComposeConfigurations) -> ComposeReference:
         pass
 

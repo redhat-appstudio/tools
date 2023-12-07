@@ -1,3 +1,4 @@
+"""Request a new ODCS compose"""
 from dataclasses import dataclass
 
 from .protocols import ComposeConfigurations, ComposeReference, ComposeRequester
@@ -8,6 +9,7 @@ class ODCSRequestReference(ComposeReference):
     """
     Reference to a remotely-stored compose data
     """
+
     compose_url: str
 
 
@@ -17,5 +19,6 @@ class ODCSRequester(ComposeRequester):
     Request a new ODCS compose based on compose configurations and return a reference
     to the remote compose location.
     """
+
     def __call__(self, configs: ComposeConfigurations) -> ODCSRequestReference:
         raise NotImplementedError()

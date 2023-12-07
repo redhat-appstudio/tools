@@ -1,3 +1,4 @@
+"""Top level generic entity for creating a compose"""
 from dataclasses import dataclass
 
 from .protocols import (
@@ -20,6 +21,7 @@ class ComposeGenerator:
     :param requestor: an object to request a new composed
     :param fetcher: an object to fetch a compose once it's ready
     """
+
     configurations_generator: ComposeConfigurationsGenerator
     requestor: ComposeRequester
     fetcher: ComposeFetcher
