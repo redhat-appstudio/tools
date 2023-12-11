@@ -2,7 +2,7 @@
 from subprocess import run
 from typing import Final
 
-PKGS: Final[list[str]] = ["tests", "compose_generator"]
+PKGS: Final[list[str]] = ["tests", "generate_compose"]
 
 
 def test_mypy() -> None:

@@ -11,6 +11,8 @@ black = "*"
 mypy = "*"
 pylint = "*"
 isort = "*"
+pyyaml = "*"
+types-pyyaml = "*"
 
 [dev-packages]
 
