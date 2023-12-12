@@ -15,6 +15,7 @@ pyyaml = "*"
 types-pyyaml = "*"
 responses = "*"
 types-requests = "*"
+odcs = {extras = ["client"], version = "*"}
 
 [dev-packages]
 pytest = "*"
