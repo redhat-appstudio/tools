@@ -45,5 +45,5 @@ class ODCSFetcher(ComposeFetcher):
 
         self.compose_file_path.parent.mkdir(parents=True, exist_ok=True)
         self.compose_file_path.write_text(response.text, encoding="utf-8")
-        ocds_result_ref = ODCSResultReference(compose_file_path=self.compose_file_path)
-        return ocds_result_ref
+        odcs_result_ref = ODCSResultReference(compose_file_path=self.compose_file_path)
+        return odcs_result_ref
