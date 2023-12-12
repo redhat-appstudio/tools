@@ -38,7 +38,7 @@ def main(
     content_sets_yaml_path: Path,
 ):
     """
-    Get inputs from container and content_sets yamls and relay them to an ODCS
+    Get inputs from container and content_sets YAMLs and relay them to an ODCS
     compose generator that will request a compose and store it in a TBD location.
     """
     container_data: dict = yaml.safe_load(container_yaml_path.read_text())

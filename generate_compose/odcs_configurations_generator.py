@@ -14,7 +14,7 @@ class ODCSConfigurations(ComposeConfigurations):
 @dataclass(frozen=True)
 class ODCSConfigurationsGenerator(ComposeConfigurationsGenerator):
     """
-    Generate odcs configurations based on container and content_sets yamls.
+    Generate odcs configurations based on container and content_sets YAMLs.
 
     :param container_data: data loaded from container.yaml
     :param content_sets_data: data loaded from content_sets.yaml
