@@ -1,12 +1,55 @@
 """Test rpm_verifier.py end-to-end"""
 
+from pathlib import Path
 from unittest.mock import MagicMock, call, create_autospec, sentinel
 
 import pytest
 from pytest import MonkeyPatch
 
 from verify_rpms import rpm_verifier
-from verify_rpms.rpm_verifier import ImageProcessor, generate_output
+from verify_rpms.rpm_verifier import ImageProcessor, ProcessedImage, generate_output
+
+
+class TestImageProcessor:
+    """Test ImageProcessor's callable"""
+
+    @pytest.fixture()
+    def mock_db_getter(self) -> MagicMock:
+        "mocked db_getter function"
+        return MagicMock()
+
+    @pytest.fixture()
+    def mock_rpms_getter(self) -> MagicMock:
+        "mocked rpms_getter function"
+        return MagicMock()
+
+    @pytest.mark.parametrize(
+        ("unsigned_rpms"),
+        [
+            pytest.param([], id="all signed"),
+            pytest.param(["my-unsigned-rpm"], id="one unsigned"),
+            pytest.param(
+                ["my-unsigned-rpm", "their-unsigned-rpm"], id="multiple unsigned"
+            ),
+        ],
+    )
+    def test_call(
+        self,
+        mock_db_getter: MagicMock,
+        mock_rpms_getter: MagicMock,
+        tmp_path: Path,
+        unsigned_rpms: list[str],
+    ) -> None:
+        """Test ImageProcessor's callable"""
+        mock_rpms_getter.return_value = unsigned_rpms
+        instance = ImageProcessor(
+            workdir=tmp_path,
+            db_getter=mock_db_getter,
+            rpms_getter=mock_rpms_getter,
+        )
+        img = "my-img"
+        out = instance(img)
+        assert out == ProcessedImage(image=img, unsigned_rpms=unsigned_rpms)
 
 
 class TestMain:
