@@ -6,7 +6,7 @@ import pytest
 import responses
 
 from generate_compose.odcs_fetcher import ODCSFetcher, ODCSResultReference
-from generate_compose.odcs_requester import ODCSRequestReference
+from generate_compose.odcs_requester import ODCSRequestReferences
 
 
 @pytest.mark.parametrize(
@@ -46,7 +46,7 @@ from generate_compose.odcs_requester import ODCSRequestReference
 )
 def test_odcs_fetcher(tmp_path: Path, composes: list[str], urls: list[str]) -> None:
     """test ODCSFetcher.__call__"""
-    req_ref = ODCSRequestReference(compose_urls=urls)
+    req_ref = ODCSRequestReferences(compose_urls=urls)
     fetcher = ODCSFetcher(compose_dir_path=tmp_path)
 
     with responses.RequestsMock() as mock:

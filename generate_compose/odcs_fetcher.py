@@ -5,7 +5,7 @@ from pathlib import Path
 
 import requests
 
-from .odcs_requester import ODCSRequestReference
+from .odcs_requester import ODCSRequestReferences
 from .protocols import ComposeFetcher, ComposeReference
 
 
@@ -39,7 +39,7 @@ class ODCSFetcher(ComposeFetcher):
         :return: The filesystem path to the downloaded ODCS compose file.
         """
         self.compose_dir_path.mkdir(parents=True, exist_ok=True)
-        assert isinstance(request_reference, ODCSRequestReference)
+        assert isinstance(request_reference, ODCSRequestReferences)
         urls = request_reference.compose_urls
         for url in urls:
             with tempfile.NamedTemporaryFile(

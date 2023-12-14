@@ -1,11 +1,14 @@
 """Request a new ODCS compose"""
 from dataclasses import dataclass
 
+from odcs.client.odcs import ODCS  # type: ignore
+
+from .odcs_configurations_generator import ODCSComposesConfigs
 from .protocols import ComposeConfigurations, ComposeReference, ComposeRequester
 
 
 @dataclass(frozen=True)
-class ODCSRequestReference(ComposeReference):
+class ODCSRequestReferences(ComposeReference):
     """
     Reference to a remotely-stored compose data
     """
@@ -16,9 +19,21 @@ class ODCSRequestReference(ComposeReference):
 @dataclass(frozen=True)
 class ODCSRequester(ComposeRequester):
     """
-    Request a new ODCS compose based on compose configurations and return a reference
+    Request new ODCS composes based on compose configurations and return a reference
     to the remote compose location.
     """
 
-    def __call__(self, configs: ComposeConfigurations) -> ODCSRequestReference:
-        raise NotImplementedError()
+    odcs: ODCS = ODCS("https://odcs.engineering.redhat.com/")
+
+    def __call__(self, compose_configs: ComposeConfigurations) -> ODCSRequestReferences:
+        assert isinstance(compose_configs, ODCSComposesConfigs)
+        composes = [
+            self.odcs.request_compose(config.spec, **config.additional_args)
+            for config in compose_configs.configs
+        ]
+        for compose in composes:
+            self.odcs.wait_for_compose(compose["id"])
+
+        compose_urls = [compose["result_repofile"] for compose in composes]
+        req_refrences = ODCSRequestReferences(compose_urls=compose_urls)
+        return req_refrences
