@@ -37,18 +37,17 @@ class TestMain:
         """Test call to rpm_verifier.py main function"""
         rpm_verifier.main(  # pylint: disable=no-value-for-parameter
             args=[
-                "--container-image",
+                "--input",
                 "img1",
-                "--container-image",
-                "img2",
                 "--fail-unsigned",
+                "true",
+                "--workdir",
+                "some/path",
             ],
             obj={},
             standalone_mode=False,
         )
 
-        assert mock_image_processor.return_value.call_count == 2
-        mock_image_processor.return_value.assert_has_calls([call("img1"), call("img2")])
-        mock_generate_output.assert_called_once_with(
-            [sentinel.output, sentinel.output], True
-        )
+        assert mock_image_processor.return_value.call_count == 1
+        mock_image_processor.return_value.assert_has_calls([call("img1")])
+        mock_generate_output.assert_called_once_with([sentinel.output], True)
