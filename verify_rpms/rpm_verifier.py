@@ -43,8 +43,31 @@ def get_rpmdb(container_image: str, target_dir: Path, runner: Callable = run) ->
 
 
 def get_unsigned_rpms(rpmdb: Path, runner: Callable = run) -> list[str]:
-    """Get unsigned RPMs from RPM DB path"""
-    raise NotImplementedError()
+    """
+    Get all unsigned RPMs from RPM DB path
+    Filter and return the unsigned RPMs
+    :param rpmdb: path to RPM DB folder
+    :param runner: subprocess.run to run CLI commands
+    :return: list of unsigned RPMs within the folder
+    """
+    rpm_strs = runner(
+        [
+            "rpm",
+            "-qa",
+            "--qf",
+            "%{NAME}-%{VERSION}-%{RELEASE} %{SIGGPG:pgpsig} %{SIGPGP:pgpsig}\n",
+            "--dbpath",
+            str(rpmdb),
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.splitlines()
+    return [
+        rpm.split()[0]
+        for rpm in rpm_strs
+        if "Key ID" not in rpm and not rpm.startswith("gpg-pubkey")
+    ]
 
 
 def generate_output(
