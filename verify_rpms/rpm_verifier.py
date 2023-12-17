@@ -6,6 +6,7 @@ import sys
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from json import JSONDecodeError, loads
 from pathlib import Path
 from subprocess import run
 from typing import Callable, Iterable
@@ -97,9 +98,13 @@ def parse_image_input(image_input: str) -> list[str]:
     Try parsing as json and extract the images.
     If failing to parse as json, assume it's an image reference as one-element list.
     """
-    # Currently assuming a single image. To be replaced by deciding whether this is an
-    # image or a snapshot json, and parsing accordingly
-    return [image_input]
+    try:
+        snapshot = loads(s=image_input)
+    except JSONDecodeError:
+        return [image_input]
+    components = snapshot["spec"]["components"]
+    container_images = [component["containerImage"] for component in components]
+    return container_images
 
 
 @dataclass(frozen=True)
