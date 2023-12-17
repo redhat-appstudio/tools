@@ -13,6 +13,7 @@ from verify_rpms.rpm_verifier import (
     ProcessedImage,
     generate_output,
     get_rpmdb,
+    get_unsigned_rpms,
 )
 
 
@@ -93,21 +94,57 @@ def test_generate_output(
     assert print_out == expected_print
 
 
+@pytest.mark.parametrize(
+    "test_input,expected",
+    [
+        pytest.param(
+            dedent(
+                """
+                libssh-config-0.9.6-10.el8_8 (none) RSA/SHA256, Tue 6 May , Key ID 1234567890
+                python39-twisted-23.10.0-1.el8ap (none) (none)
+                libmodulemd-2.13.0-1.el8 (none) RSA/SHA256, Wed 18 Aug , Key ID 1234567890
+                gpg-pubkey-d4082792-5b32db75 (none) (none)
+                """
+            ).strip(),
+            ["python39-twisted-23.10.0-1.el8ap"],
+            id="Mix of signed and unsigned",
+        ),
+        pytest.param(
+            dedent(
+                """
+                libssh-config-0.9.6-10.el8_8 (none) RSA/SHA256, Tue 6 May , Key ID 1234567890
+                libmodulemd-2.13.0-1.el8 (none) RSA/SHA256, Wed 18 Aug , Key ID 1234567890
+                """
+            ).strip(),
+            [],
+            id="All signed",
+        ),
+        pytest.param("", [], id="Empty list"),
+    ],
+)
+def test_get_unsigned_rpms(test_input: list[str], expected: list[str]) -> None:
+    """Test get_unsigned_rpms"""
+    mock_runner = MagicMock()
+    mock_runner.return_value.stdout = test_input
+    result = get_unsigned_rpms(rpmdb=Path("rpmdb_folder"), runner=mock_runner)
+    assert result == expected
+
+
 class TestImageProcessor:
     """Test ImageProcessor's callable"""
 
     @pytest.fixture()
     def mock_db_getter(self) -> MagicMock:
-        "mocked db_getter function"
+        """mocked db_getter function"""
         return MagicMock()
 
     @pytest.fixture()
     def mock_rpms_getter(self) -> MagicMock:
-        "mocked rpms_getter function"
+        """mocked rpms_getter function"""
         return MagicMock()
 
     @pytest.mark.parametrize(
-        ("unsigned_rpms"),
+        ("unsigned_rpms",),
         [
             pytest.param([], id="all signed"),
             pytest.param(["my-unsigned-rpm"], id="one unsigned"),
