@@ -10,7 +10,7 @@ class ODCSRequestReference(ComposeReference):
     Reference to a remotely-stored compose data
     """
 
-    compose_url: str
+    compose_urls: list[str]
 
 
 @dataclass(frozen=True)
