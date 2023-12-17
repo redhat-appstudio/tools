@@ -1,5 +1,4 @@
 """Test rpm_verifier.py end-to-end"""
-
 from pathlib import Path
 from textwrap import dedent
 from unittest.mock import MagicMock, call, create_autospec, sentinel
@@ -14,6 +13,7 @@ from verify_rpms.rpm_verifier import (
     generate_output,
     get_rpmdb,
     get_unsigned_rpms,
+    parse_image_input,
 )
 
 
@@ -128,6 +128,57 @@ def test_get_unsigned_rpms(test_input: list[str], expected: list[str]) -> None:
     mock_runner.return_value.stdout = test_input
     result = get_unsigned_rpms(rpmdb=Path("rpmdb_folder"), runner=mock_runner)
     assert result == expected
+
+
+@pytest.mark.parametrize(
+    "test_input,expected",
+    [
+        pytest.param(
+            dedent(
+                """
+                {
+                    "spec": {
+                        "application": "test",
+                        "components": [
+                            {
+                                "containerImage": "quay.io/container-image@sha256:123"
+                            },
+                            {
+                                "containerImage": "quay.io/container-image@sha256:456"
+                            },      
+                            {
+                                "containerImage": "quay.io/container-image@sha256:789"
+                            }
+                        ]
+                    }
+                }
+                """
+            ).strip(),
+            [
+                "quay.io/container-image@sha256:123",
+                "quay.io/container-image@sha256:456",
+                "quay.io/container-image@sha256:789",
+            ],
+            id="snapshot test",
+        ),
+        pytest.param(
+            "quay.io/container-image@sha256:123",
+            ["quay.io/container-image@sha256:123"],
+            id="single container",
+        ),
+    ],
+)
+def test_parse_image_input(test_input: str, expected: list[str]) -> None:
+    """Test parse_image_input"""
+    result = parse_image_input(image_input=test_input)
+    assert result == expected
+
+
+def test_parse_image_input_exception() -> None:
+    """Test parse_image_input throws exception"""
+    test_input = '{"apiVersion": "appstudio.redhat.com/v1alpha1"}'
+    with pytest.raises(KeyError):
+        parse_image_input(image_input=test_input)
 
 
 class TestImageProcessor:
