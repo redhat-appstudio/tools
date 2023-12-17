@@ -16,6 +16,7 @@ types-pyyaml = "*"
 responses = "*"
 types-requests = "*"
 odcs = {extras = ["client"], version = "*"}
+appstudio-tools = {file = ".", editable = true}
 
 [dev-packages]
 pytest = "*"
