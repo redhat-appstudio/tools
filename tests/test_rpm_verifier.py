@@ -1,6 +1,7 @@
 """Test rpm_verifier.py end-to-end"""
 
 from pathlib import Path
+from textwrap import dedent
 from unittest.mock import MagicMock, call, create_autospec, sentinel
 
 import pytest
@@ -8,6 +9,83 @@ from pytest import MonkeyPatch
 
 from verify_rpms import rpm_verifier
 from verify_rpms.rpm_verifier import ImageProcessor, ProcessedImage, generate_output
+
+
+@pytest.mark.parametrize(
+    ("processed_images", "fail", "expected_print", "expected_fail"),
+    [
+        pytest.param(
+            [ProcessedImage(image="i1", unsigned_rpms=[])],
+            False,
+            "No unsigned RPMs found.",
+            False,
+            id="No unsigned RPMs + do not fail if unsigned",
+        ),
+        pytest.param(
+            [
+                ProcessedImage(image="i1", unsigned_rpms=[]),
+                ProcessedImage(image="i2", unsigned_rpms=[]),
+            ],
+            True,
+            "No unsigned RPMs found.",
+            False,
+            id="No unsigned RPMs + fail if unsigned",
+        ),
+        pytest.param(
+            [ProcessedImage(image="i1", unsigned_rpms=["my-rpm"])],
+            False,
+            dedent(
+                """
+                Found unsigned RPMs:
+                image: i1 | unsigned RPMs: my-rpm
+                """
+            ).strip(),
+            False,
+            id="1 unsigned + do not fail if unsigned",
+        ),
+        pytest.param(
+            [
+                ProcessedImage(image="i1", unsigned_rpms=["my-rpm", "another-rpm"]),
+                ProcessedImage(image="i2", unsigned_rpms=[]),
+            ],
+            True,
+            dedent(
+                """
+                Found unsigned RPMs:
+                image: i1 | unsigned RPMs: my-rpm, another-rpm
+                """
+            ).strip(),
+            True,
+            id="an image with multiple unsigned and another without + fail if unsigned",
+        ),
+        pytest.param(
+            [
+                ProcessedImage(image="i1", unsigned_rpms=["my-rpm", "another-rpm"]),
+                ProcessedImage(image="i2", unsigned_rpms=["their-rpm"]),
+            ],
+            True,
+            dedent(
+                """
+                Found unsigned RPMs:
+                image: i1 | unsigned RPMs: my-rpm, another-rpm
+                image: i2 | unsigned RPMs: their-rpm
+                """
+            ).strip(),
+            True,
+            id="multiple images with unsigned rpms + fail if unsigned",
+        ),
+    ],
+)
+def test_generate_output(
+    processed_images: list[ProcessedImage],
+    fail: bool,
+    expected_print: str,
+    expected_fail: bool,
+) -> None:
+    """Test generate output"""
+    fail_out, print_out = generate_output(processed_images, fail)
+    assert fail_out == expected_fail
+    assert print_out == expected_print
 
 
 class TestImageProcessor:
@@ -68,7 +146,7 @@ class TestMain:
     @pytest.fixture()
     def mock_generate_output(self, monkeypatch: MonkeyPatch) -> MagicMock:
         """Monkey-patched generate_output"""
-        mock = create_autospec(generate_output)
+        mock = create_autospec(generate_output, return_value=(False, ""))
         monkeypatch.setattr(rpm_verifier, generate_output.__name__, mock)
         return mock
 
