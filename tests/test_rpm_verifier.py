@@ -8,7 +8,12 @@ import pytest
 from pytest import MonkeyPatch
 
 from verify_rpms import rpm_verifier
-from verify_rpms.rpm_verifier import ImageProcessor, ProcessedImage, generate_output
+from verify_rpms.rpm_verifier import (
+    ImageProcessor,
+    ProcessedImage,
+    generate_output,
+    get_rpmdb,
+)
 
 
 @pytest.mark.parametrize(
@@ -128,6 +133,19 @@ class TestImageProcessor:
         img = "my-img"
         out = instance(img)
         assert out == ProcessedImage(image=img, unsigned_rpms=unsigned_rpms)
+
+
+def test_get_rpmdb(tmp_path: Path) -> None:
+    """Test get_rpmdb"""
+    image = "my-image"
+    mock_runner = MagicMock()
+    out = get_rpmdb(
+        container_image=image,
+        target_dir=tmp_path,
+        runner=mock_runner,
+    )
+    assert mock_runner.call_count == 1
+    assert out == tmp_path
 
 
 class TestMain:

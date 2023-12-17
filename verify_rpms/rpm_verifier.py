@@ -26,7 +26,20 @@ class ProcessedImage:
 
 def get_rpmdb(container_image: str, target_dir: Path, runner: Callable = run) -> Path:
     """Extract RPM DB from a given container image reference"""
-    raise NotImplementedError()
+    runner(
+        [
+            "oc",
+            "image",
+            "extract",
+            container_image,
+            "--path",
+            f"/var/lib/rpm/:{target_dir}",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return target_dir
 
 
 def get_unsigned_rpms(rpmdb: Path, runner: Callable = run) -> list[str]:
