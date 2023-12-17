@@ -1,40 +1,61 @@
 """test_odcs_fetcher.py - test odcs_fetcher"""
 from pathlib import Path
+from textwrap import dedent
 
+import pytest
 import responses
 
-from generate_compose.odcs_fetcher import ODCSFetcher
+from generate_compose.odcs_fetcher import ODCSFetcher, ODCSResultReference
 from generate_compose.odcs_requester import ODCSRequestReference
 
 
-def test_odcs_fetcher(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("composes", "urls"),
+    [
+        pytest.param(
+            [
+                dedent(
+                    """
+                    [odcs-111]
+                    name=compose 1
+                    """
+                )
+            ],
+            ["https://url1"],
+            id="single compose",
+        ),
+        pytest.param(
+            [
+                dedent(
+                    """
+                    [odcs-111]
+                    name=compose 1
+                    """
+                ),
+                dedent(
+                    """
+                    [odcs-222]
+                    name=compose 2
+                    """
+                ),
+            ],
+            ["https://url1", "https://url2"],
+            id="multiple composes",
+        ),
+    ],
+)
+def test_odcs_fetcher(tmp_path: Path, composes: list[str], urls: list[str]) -> None:
     """test ODCSFetcher.__call__"""
-    expected_content: str = """
-    [odcs-2222222]
-    name=ODCS repository for compose odcs-2222222
-    baseurl=http://download.eng.bos.redhat.com/odcs/prod/odcs-2222222/compose/Temporary/$basearch/os
-    type=rpm-md
-    skip_if_unavailable=False
-    gpgcheck=0
-    repo_gpgcheck=0
-    enabled=1
-    enabled_metadata=1
-    """
-    mock_compose_url: str = (
-        "http://download.eng.bos.redhat.com/odcs/prod/odcs-222222"
-        "/compose/Temporary/odcs-2222222.repo"
-    )
-    odcs_ref = ODCSRequestReference(compose_url=mock_compose_url)
+    req_ref = ODCSRequestReference(compose_urls=urls)
+    fetcher = ODCSFetcher(compose_dir_path=tmp_path)
 
-    compose_path = tmp_path / "downloaded_file_dir" / "odcs-2222222.repo"
-    odcs_fetcher = ODCSFetcher(compose_file_path=compose_path)
+    with responses.RequestsMock() as mock:
+        for compose, url in zip(composes, urls):
+            mock.add(responses.GET, url, body=compose)
+        out: ODCSResultReference = fetcher(request_reference=req_ref)
 
-    with responses.RequestsMock() as req_mock:
-        req_mock.add(responses.GET, mock_compose_url, body=expected_content)
-        odcs_result_ref = odcs_fetcher(request_reference=odcs_ref)
+    files_content = [
+        p.read_text(encoding="utf-8") for p in out.compose_dir_path.iterdir()
+    ]
 
-    assert odcs_result_ref.compose_file_path.exists()
-    odcs_result_ref_content = odcs_result_ref.compose_file_path.read_text(
-        encoding="utf-8"
-    )
-    assert odcs_result_ref_content == expected_content
+    assert set(composes) == set(files_content)

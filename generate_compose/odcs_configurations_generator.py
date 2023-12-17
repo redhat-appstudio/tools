@@ -16,12 +16,10 @@ class ODCSConfigurationsGenerator(ComposeConfigurationsGenerator):
     """
     Generate odcs configurations based on container and content_sets YAMLs.
 
-    :param container_data: data loaded from container.yaml
-    :param content_sets_data: data loaded from content_sets.yaml
+    :param compose_inputs: data loaded from compose inputs yaml
     """
 
-    container_data: dict
-    content_sets_data: dict
+    compose_inputs: dict
 
     def __call__(self) -> ODCSConfigurations:
         raise NotImplementedError()

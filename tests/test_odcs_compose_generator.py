@@ -17,52 +17,22 @@ class TestODCSComposeGenerator:
     """Test odcs_compose_generator.py end-to-end"""
 
     @pytest.fixture()
-    def container_data(self) -> dict:
-        """container.yaml content"""
-        return {
-            "compose": {"pulp_repos": True, "signing_intent": "release"},
-            "image_build_method": "imagebuilder",
-            "remote_source": {
-                "pkg_managers": [],
-                "ref": "f6ceb2ff45a71938f6949abcd15aa0a1b0f79842",
-                "repo": "https://github.com/kubevirt/must-gather",
-            },
-        }
+    def input_data(self) -> list:
+        """inputs yaml content"""
+        return [{"spec": {}, "additional_args": {}}]
 
     @pytest.fixture()
-    def container_yaml(self, container_data: dict, tmp_path: Path) -> Path:
-        """path to container.yaml with content"""
-        path = tmp_path / "container.yaml"
+    def input_yaml(self, input_data: list, tmp_path: Path) -> Path:
+        """path to inputs.yaml with content"""
+        path = tmp_path / "inputs.yaml"
         with path.open("w") as file:
-            yaml.dump(container_data, file)
+            yaml.dump(input_data, file)
         return path
 
     @pytest.fixture()
-    def content_sets_data(self) -> dict:
-        """content_sets.yaml content"""
-        return {
-            "x86_64": [
-                "rhel-8-for-x86_64-baseos-eus-rpms__8_DOT_6",
-                "rhel-8-for-x86_64-appstream-eus-rpms__8_DOT_6",
-            ],
-            "aarch64": [
-                "rhel-8-for-aarch64-baseos-eus-rpms__8_DOT_6",
-                "rhel-8-for-aarch64-appstream-eus-rpms__8_DOT_6",
-            ],
-        }
-
-    @pytest.fixture()
-    def content_sets_yaml(self, content_sets_data: dict, tmp_path: Path) -> Path:
-        """path to content_sets.yaml with content"""
-        path = tmp_path / "content_sets.yml"
-        with path.open("w") as file:
-            yaml.dump(content_sets_data, file)
-        return path
-
-    @pytest.fixture()
-    def compose_file_path(self, tmp_path: Path) -> Path:
+    def compose_dir_path(self, tmp_path: Path) -> Path:
         """Path to where the compose should be stored"""
-        return tmp_path / "repofile.repo"
+        return tmp_path
 
     @pytest.fixture()
     def mock_config_generator(self, monkeypatch: MonkeyPatch) -> MagicMock:
@@ -99,11 +69,9 @@ class TestODCSComposeGenerator:
 
     def test_main(  # pylint: disable=too-many-arguments
         self,
-        compose_file_path: Path,
-        container_data: dict,
-        container_yaml: Path,
-        content_sets_data: dict,
-        content_sets_yaml: Path,
+        compose_dir_path: Path,
+        input_data: dict,
+        input_yaml: Path,
         mock_compose_generator: MagicMock,
         mock_config_generator: MagicMock,
         mock_requester: MagicMock,
@@ -112,21 +80,17 @@ class TestODCSComposeGenerator:
         """Test call to odcs_compose_generator.py main function"""
         odcs_compose_generator.main(  # pylint: disable=no-value-for-parameter
             args=[
-                "--compose-file-path",
-                str(compose_file_path),
-                "--container-yaml-path",
-                str(container_yaml),
-                "--content-sets-yaml-path",
-                str(content_sets_yaml),
+                "--compose-dir-path",
+                str(compose_dir_path),
+                "--compose-input-yaml-path",
+                str(input_yaml),
             ],
             obj={},
             standalone_mode=False,
         )
 
-        mock_config_generator.assert_called_once_with(
-            container_data=container_data, content_sets_data=content_sets_data
-        )
-        mock_fetcher.assert_called_once_with(compose_file_path=compose_file_path)
+        mock_config_generator.assert_called_once_with(compose_inputs=input_data)
+        mock_fetcher.assert_called_once_with(compose_dir_path=compose_dir_path)
         mock_compose_generator.assert_called_once_with(
             configurations_generator=mock_config_generator.return_value,
             requestor=mock_requester.return_value,

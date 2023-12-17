@@ -1,4 +1,5 @@
 """Fetch ready ODCS compose"""
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -11,10 +12,10 @@ from .protocols import ComposeFetcher, ComposeReference
 @dataclass(frozen=True)
 class ODCSResultReference(ComposeReference):
     """
-    Reference to a locally-stored compose result
+    Reference to locally-stored compose results
     """
 
-    compose_file_path: Path
+    compose_dir_path: Path
 
 
 @dataclass(frozen=True)
@@ -22,28 +23,30 @@ class ODCSFetcher(ComposeFetcher):
     """
     Fetch ODCS compose based on a remote compose-reference and store it locally
 
-    :param compose_file_path: The Desired path for the compose file.
-                              must include the path to the file as
-                              well as the file's name.
+    :param compose_dir_path: The Desired path for where compose files should be stored
     """
 
-    compose_file_path: Path
+    compose_dir_path: Path
 
     def __call__(self, request_reference: ComposeReference) -> ODCSResultReference:
         """
         Fetch the 'ODCS compose' from a remote reference.
 
-        :param request_reference: An object containing the url reference for the
+        :param request_reference: An object containing the url references for the
                                   ODCS compose file.
 
         :raises HTTPError: If the request for the ODCS compose file failed.
         :return: The filesystem path to the downloaded ODCS compose file.
         """
+        self.compose_dir_path.mkdir(parents=True, exist_ok=True)
         assert isinstance(request_reference, ODCSRequestReference)
-        response = requests.get(request_reference.compose_url, timeout=10)
-        response.raise_for_status()
+        urls = request_reference.compose_urls
+        for url in urls:
+            with tempfile.NamedTemporaryFile(
+                delete=False, dir=self.compose_dir_path
+            ) as compose_path:
+                response = requests.get(url, timeout=10)
+                response.raise_for_status()
+                Path(compose_path.name).write_text(response.text, encoding="utf-8")
 
-        self.compose_file_path.parent.mkdir(parents=True, exist_ok=True)
-        self.compose_file_path.write_text(response.text, encoding="utf-8")
-        odcs_result_ref = ODCSResultReference(compose_file_path=self.compose_file_path)
-        return odcs_result_ref
+        return ODCSResultReference(compose_dir_path=self.compose_dir_path)
