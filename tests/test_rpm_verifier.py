@@ -1,5 +1,6 @@
 """Test rpm_verifier.py end-to-end"""
 from pathlib import Path
+from subprocess import CalledProcessError
 from textwrap import dedent
 from unittest.mock import MagicMock, call, create_autospec, sentinel
 
@@ -43,7 +44,7 @@ from verify_rpms.rpm_verifier import (
             dedent(
                 """
                 Found unsigned RPMs:
-                image: i1 | unsigned RPMs: my-rpm
+                i1: my-rpm
                 """
             ).strip(),
             False,
@@ -58,7 +59,7 @@ from verify_rpms.rpm_verifier import (
             dedent(
                 """
                 Found unsigned RPMs:
-                image: i1 | unsigned RPMs: my-rpm, another-rpm
+                i1: my-rpm, another-rpm
                 """
             ).strip(),
             True,
@@ -73,12 +74,72 @@ from verify_rpms.rpm_verifier import (
             dedent(
                 """
                 Found unsigned RPMs:
-                image: i1 | unsigned RPMs: my-rpm, another-rpm
-                image: i2 | unsigned RPMs: their-rpm
+                i1: my-rpm, another-rpm
+                i2: their-rpm
                 """
             ).strip(),
             True,
             id="multiple images with unsigned rpms + fail if unsigned",
+        ),
+        pytest.param(
+            [
+                ProcessedImage(
+                    image="i1", unsigned_rpms=[], error="Failed to run command"
+                ),
+                ProcessedImage(image="i2", unsigned_rpms=["their-rpm"]),
+            ],
+            True,
+            dedent(
+                """
+                Found unsigned RPMs:
+                i2: their-rpm
+                Encountered errors:
+                i1: Failed to run command 
+                """
+            ).strip(),
+            True,
+            id="Error in running command + image with unsigned rpms + fail if unsigned",
+        ),
+        pytest.param(
+            [
+                ProcessedImage(
+                    image="i1", unsigned_rpms=[], error="Failed to run first command"
+                ),
+                ProcessedImage(
+                    image="i2", unsigned_rpms=[], error="Failed to run second command"
+                ),
+            ],
+            True,
+            dedent(
+                """
+                Encountered errors:
+                i1: Failed to run first command
+                i2: Failed to run second command
+                """
+            ).strip(),
+            True,
+            id="2 Errors in running command + fail if unsigned",
+        ),
+        pytest.param(
+            [
+                ProcessedImage(
+                    image="i1", unsigned_rpms=[], error="Failed to run first command"
+                ),
+                ProcessedImage(
+                    image="i2", unsigned_rpms=["my-rpm", "another-rpm"], error=""
+                ),
+            ],
+            False,
+            dedent(
+                """
+                Found unsigned RPMs:
+                i2: my-rpm, another-rpm
+                Encountered errors:
+                i1: Failed to run first command
+                """
+            ).strip(),
+            False,
+            id="Errors in running command + image with unsigned rpms + do not fail if unsigned",
         ),
     ],
 )
@@ -220,7 +281,51 @@ class TestImageProcessor:
         )
         img = "my-img"
         out = instance(img)
-        assert out == ProcessedImage(image=img, unsigned_rpms=unsigned_rpms)
+        assert out == ProcessedImage(image=img, unsigned_rpms=unsigned_rpms, error="")
+
+    def test_call_db_getter_exception(
+        self,
+        mock_db_getter: MagicMock,
+        mock_rpms_getter: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """Test ImageProcessor's callable"""
+        stderr = "Failed to run command"
+        mock_db_getter.side_effect = CalledProcessError(
+            stderr=stderr, returncode=1, cmd=""
+        )
+        instance = ImageProcessor(
+            workdir=tmp_path,
+            db_getter=mock_db_getter,
+            rpms_getter=mock_rpms_getter,
+        )
+        img = "my-img"
+        out = instance(img)
+        mock_db_getter.assert_called_once()
+        mock_rpms_getter.assert_not_called()
+        assert out == ProcessedImage(image=img, unsigned_rpms=[], error=stderr)
+
+    def test_call_rpm_getter_exception(
+        self,
+        mock_db_getter: MagicMock,
+        mock_rpms_getter: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """Test ImageProcessor's callable"""
+        stderr = "Failed to run command"
+        mock_rpms_getter.side_effect = CalledProcessError(
+            stderr=stderr, returncode=1, cmd=""
+        )
+        instance = ImageProcessor(
+            workdir=tmp_path,
+            db_getter=mock_db_getter,
+            rpms_getter=mock_rpms_getter,
+        )
+        img = "my-img"
+        out = instance(img)
+        mock_db_getter.assert_called_once()
+        mock_rpms_getter.assert_called_once()
+        assert out == ProcessedImage(image=img, unsigned_rpms=[], error=stderr)
 
 
 def test_get_rpmdb(tmp_path: Path) -> None:
