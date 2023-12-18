@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from json import JSONDecodeError, loads
 from pathlib import Path
-from subprocess import run
+from subprocess import CalledProcessError, run
 from typing import Callable, Iterable
 
 import click
@@ -20,9 +20,10 @@ class ProcessedImage:
 
     image: str
     unsigned_rpms: list[str]
+    error: str = ""
 
     def __str__(self) -> str:
-        return f"image: {self. image} | unsigned RPMs: {', '.join(self.unsigned_rpms)}"
+        return f"{self. image}: {', '.join(self.unsigned_rpms)}"
 
 
 def get_rpmdb(container_image: str, target_dir: Path, runner: Callable = run) -> Path:
@@ -82,14 +83,17 @@ def generate_output(
     :param fail_unsigned: whether the script should fail in case unsigned rpms found
     """
     with_unsigned_rpms = [img for img in processed_images if img.unsigned_rpms]
-    if not with_unsigned_rpms:
+    with_error = [img for img in processed_images if img.error]
+    if not with_unsigned_rpms and not with_error:
         output = "No unsigned RPMs found."
         fail = False
     else:
         output = "\n".join([str(img) for img in with_unsigned_rpms])
-        output = f"Found unsigned RPMs:\n{output}"
+        output = f"Found unsigned RPMs:\n{output}" if with_unsigned_rpms else ""
+        error_str = "\n".join([f"{img.image}: {img.error}" for img in with_error])
+        output = f"{output}\nEncountered errors:\n{error_str}" if error_str else output
         fail = fail_unsigned
-    return fail, output
+    return fail, output.lstrip()
 
 
 def parse_image_input(image_input: str) -> list[str]:
@@ -119,8 +123,15 @@ class ImageProcessor:
         with tempfile.TemporaryDirectory(
             dir=str(self.workdir), prefix="rpmdb"
         ) as tmpdir:
-            rpm_db = self.db_getter(img, Path(tmpdir))
-            unsigned_rpms = self.rpms_getter(rpm_db)
+            try:
+                rpm_db = self.db_getter(img, Path(tmpdir))
+                unsigned_rpms = self.rpms_getter(rpm_db)
+            except CalledProcessError as err:
+                return ProcessedImage(
+                    image=img,
+                    unsigned_rpms=[],
+                    error=err.stderr,
+                )
             return ProcessedImage(
                 image=img,
                 unsigned_rpms=unsigned_rpms,
