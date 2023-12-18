@@ -4,9 +4,11 @@
         "baseos",
         "gpgcheck",
         "imagebuilder",
+        "keytab",
         "odcs",
         "repofile",
-        "rpms"
+        "rpms",
+        "sigkeys"
     ],
     "python.testing.pytestArgs": [
         "tests"

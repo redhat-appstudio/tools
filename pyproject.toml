@@ -1,0 +1,30 @@
+# Python package metadata file. This file replaces setup.py and other legacy
+# files, and is based on the example here:
+#   https://github.com/pypa/sampleproject/blob/main/pyproject.toml
+
+[project]
+name = "appstudio-tools"
+version = "0.1.0"
+description = "Tools for Red Hat AppStudio"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {file = "LICENSE"}
+keywords = ["appstudio", "odcs", "rpm", "development"]
+dependencies = [
+    "click",
+    "requests",
+    "pyyaml",
+    "odcs[client]",
+]
+
+[project.scripts]
+odcs_compose_generator = "generate_compose.odcs_compose_generator:main"
+odcs_ping = "generate_compose.odcs_ping:main"
+rpm_verifier = "verify_rpms.rpm_verifier:main"
+
+[build-system]
+requires = ["setuptools>=43.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages]
+find = {}
