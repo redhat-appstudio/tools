@@ -13,7 +13,7 @@ from .protocols import (
 @dataclass(frozen=True)
 class ComposeGenerator:
     """
-    Given implementations to all building blocks if a compose generator, generate a
+    Given implementations to all building blocks of a compose generator, generate a
     compose and return its reference.
 
     :param configurations_generator: an object to generate the configurations used for
