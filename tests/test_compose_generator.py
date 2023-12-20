@@ -7,7 +7,6 @@ from generate_compose.compose_generator import ComposeGenerator
 from generate_compose.protocols import (
     ComposeConfigurationsGenerator,
     ComposeFetcher,
-    ComposeReference,
     ComposeRequester,
 )
 
@@ -39,10 +38,10 @@ class TestComposeGenerator:
         """Test ComposeGenerator call using mock dependencies"""
         compose_generator = ComposeGenerator(
             configurations_generator=mock_config_generator,
-            requestor=mock_requester,
+            requester=mock_requester,
             fetcher=mock_fetcher,
         )
-        out: ComposeReference = compose_generator()
+        out = compose_generator()
 
         mock_config_generator.assert_called_once_with()
         mock_requester.assert_called_once_with(

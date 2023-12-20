@@ -93,7 +93,7 @@ class TestODCSComposeGenerator:
         mock_fetcher.assert_called_once_with(compose_dir_path=compose_dir_path)
         mock_compose_generator.assert_called_once_with(
             configurations_generator=mock_config_generator.return_value,
-            requestor=mock_requester.return_value,
+            requester=mock_requester.return_value,
             fetcher=mock_fetcher.return_value,
         )
         mock_compose_generator.return_value.assert_called_once_with()

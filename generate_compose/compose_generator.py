@@ -2,11 +2,12 @@
 from dataclasses import dataclass
 
 from .protocols import (
-    ComposeConfigurations,
     ComposeConfigurationsGenerator,
     ComposeFetcher,
-    ComposeReference,
     ComposeRequester,
+    ODCSComposesConfigs,
+    ODCSRequestReferences,
+    ODCSResultReference,
 )
 
 
@@ -18,18 +19,18 @@ class ComposeGenerator:
 
     :param configurations_generator: an object to generate the configurations used for
         requesting a new compose
-    :param requestor: an object to request a new composed
+    :param requester: an object to request a new composed
     :param fetcher: an object to fetch a compose once it's ready
     """
 
     configurations_generator: ComposeConfigurationsGenerator
-    requestor: ComposeRequester
+    requester: ComposeRequester
     fetcher: ComposeFetcher
 
-    def __call__(self) -> ComposeReference:
-        configs: ComposeConfigurations = self.configurations_generator()
-        request_reference: ComposeReference = self.requestor(configs=configs)
-        result_reference: ComposeReference = self.fetcher(
+    def __call__(self) -> ODCSResultReference:
+        configs: ODCSComposesConfigs = self.configurations_generator()
+        request_reference: ODCSRequestReferences = self.requester(configs=configs)
+        result_reference: ODCSResultReference = self.fetcher(
             request_reference=request_reference
         )
         return result_reference

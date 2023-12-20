@@ -40,7 +40,7 @@ def main(
         configurations_generator=ODCSConfigurationsGenerator(
             compose_inputs=compose_inputs,
         ),
-        requestor=ODCSRequester(),
+        requester=ODCSRequester(),
         fetcher=ODCSFetcher(compose_dir_path=compose_dir_path),
     )
     compose_generator()
