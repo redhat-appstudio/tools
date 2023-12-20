@@ -29,7 +29,9 @@ class ComposeGenerator:
 
     def __call__(self) -> ODCSResultReference:
         configs: ODCSComposesConfigs = self.configurations_generator()
-        request_reference: ODCSRequestReferences = self.requester(configs=configs)
+        request_reference: ODCSRequestReferences = self.requester(
+            compose_configs=configs
+        )
         result_reference: ODCSResultReference = self.fetcher(
             request_reference=request_reference
         )

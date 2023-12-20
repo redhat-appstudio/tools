@@ -1,4 +1,5 @@
 """Configurations generator for ODCS compose"""
+
 from dataclasses import dataclass
 
 from .protocols import ComposeConfigurationsGenerator, ODCSComposesConfigs
@@ -15,4 +16,8 @@ class ODCSConfigurationsGenerator(ComposeConfigurationsGenerator):
     compose_inputs: dict
 
     def __call__(self) -> ODCSComposesConfigs:
-        raise NotImplementedError()
+        """Generate odcs configurations based on composes request information.
+
+        :returns: an odcs configuration.
+        """
+        return ODCSComposesConfigs.from_list(self.compose_inputs["composes"])

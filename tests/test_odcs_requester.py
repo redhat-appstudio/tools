@@ -35,6 +35,10 @@ class TestODCSRequester:
                 mock.request_compose.side_effect = HTTPError
             else:
                 mock.request_compose.side_effect = [
+                    {"result_repofile": "arbitrary-temp-value", "id": i}
+                    for i in range(1, num_of_composes + 1)
+                ]
+                mock.wait_for_compose.side_effect = [
                     {"result_repofile": f"{compose_url}", "id": i}
                     for i in range(1, num_of_composes + 1)
                 ]
