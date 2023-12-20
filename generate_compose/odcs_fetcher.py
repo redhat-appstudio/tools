@@ -5,17 +5,7 @@ from pathlib import Path
 
 import requests
 
-from .odcs_requester import ODCSRequestReferences
-from .protocols import ComposeFetcher, ComposeReference
-
-
-@dataclass(frozen=True)
-class ODCSResultReference(ComposeReference):
-    """
-    Reference to locally-stored compose results
-    """
-
-    compose_dir_path: Path
+from .protocols import ComposeFetcher, ODCSRequestReferences, ODCSResultReference
 
 
 @dataclass(frozen=True)
@@ -28,7 +18,7 @@ class ODCSFetcher(ComposeFetcher):
 
     compose_dir_path: Path
 
-    def __call__(self, request_reference: ComposeReference) -> ODCSResultReference:
+    def __call__(self, request_reference: ODCSRequestReferences) -> ODCSResultReference:
         """
         Fetch the 'ODCS compose' from a remote reference.
 
@@ -39,7 +29,6 @@ class ODCSFetcher(ComposeFetcher):
         :return: The filesystem path to the downloaded ODCS compose file.
         """
         self.compose_dir_path.mkdir(parents=True, exist_ok=True)
-        assert isinstance(request_reference, ODCSRequestReferences)
         urls = request_reference.compose_urls
         for url in urls:
             with tempfile.NamedTemporaryFile(

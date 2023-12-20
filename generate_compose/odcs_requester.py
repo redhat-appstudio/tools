@@ -4,16 +4,7 @@ from dataclasses import dataclass
 from odcs.client.odcs import ODCS  # type: ignore
 
 from .odcs_configurations_generator import ODCSComposesConfigs
-from .protocols import ComposeConfigurations, ComposeReference, ComposeRequester
-
-
-@dataclass(frozen=True)
-class ODCSRequestReferences(ComposeReference):
-    """
-    Reference to a remotely-stored compose data
-    """
-
-    compose_urls: list[str]
+from .protocols import ComposeRequester, ODCSRequestReferences
 
 
 @dataclass(frozen=True)
@@ -25,8 +16,7 @@ class ODCSRequester(ComposeRequester):
 
     odcs: ODCS = ODCS("https://odcs.engineering.redhat.com/")
 
-    def __call__(self, compose_configs: ComposeConfigurations) -> ODCSRequestReferences:
-        assert isinstance(compose_configs, ODCSComposesConfigs)
+    def __call__(self, compose_configs: ODCSComposesConfigs) -> ODCSRequestReferences:
         composes = [
             self.odcs.request_compose(config.spec, **config.additional_args)
             for config in compose_configs.configs

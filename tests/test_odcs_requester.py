@@ -6,11 +6,12 @@ import pytest
 from odcs.client.odcs import ODCS, ComposeSourceGeneric  # type: ignore
 from requests.exceptions import HTTPError
 
-from generate_compose.odcs_configurations_generator import (
+from generate_compose.odcs_requester import ODCSRequester
+from generate_compose.protocols import (
     ODCSComposeConfig,
     ODCSComposesConfigs,
+    ODCSRequestReferences,
 )
-from generate_compose.odcs_requester import ODCSRequester, ODCSRequestReferences
 
 
 class TestODCSRequester:
