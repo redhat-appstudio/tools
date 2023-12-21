@@ -1,6 +1,7 @@
 """test_odcs_requester.py - test odcs_requester"""
+from textwrap import dedent
 from typing import Callable
-from unittest.mock import MagicMock, call, create_autospec
+from unittest.mock import MagicMock, call, create_autospec, sentinel
 
 import pytest
 from odcs.client.odcs import ODCS, ComposeSourceGeneric  # type: ignore
@@ -27,7 +28,9 @@ class TestODCSRequester:
         """Create an ODCS mock with specific results for the compose method"""
 
         def _mock_odcs_compose(
-            num_of_composes: int = 1, exception: bool = False
+            num_of_composes: int = 1,
+            exception: bool = False,
+            num_of_failed: int = 0,
         ) -> MagicMock:
             """Mock for ODCS.compose"""
             mock: MagicMock = create_autospec(ODCS)
@@ -35,11 +38,24 @@ class TestODCSRequester:
                 mock.request_compose.side_effect = HTTPError
             else:
                 mock.request_compose.side_effect = [
-                    {"result_repofile": "arbitrary-temp-value", "id": i}
+                    {
+                        "result_repofile": "arbitrary-temp-value",
+                        "id": i,
+                        "state_name": "not-ready",
+                    }
                     for i in range(1, num_of_composes + 1)
                 ]
                 mock.wait_for_compose.side_effect = [
-                    {"result_repofile": f"{compose_url}", "id": i}
+                    {
+                        "result_repofile": f"{compose_url}",
+                        "id": i,
+                        "state_name": "done"
+                        if i > num_of_failed
+                        else sentinel.fail_state,
+                        "state_reason": "ok"
+                        if i > num_of_failed
+                        else sentinel.fail_reason,
+                    }
                     for i in range(1, num_of_composes + 1)
                 ]
             return mock
@@ -57,7 +73,7 @@ class TestODCSRequester:
         [
             pytest.param(
                 ODCSComposesConfigs([ODCSComposeConfig(spec=compose_source)]),
-                id="single compose, tag source, no additional arguments",
+                id="single compose",
             ),
             pytest.param(
                 ODCSComposesConfigs(
@@ -66,7 +82,7 @@ class TestODCSRequester:
                         ODCSComposeConfig(spec=compose_source),
                     ]
                 ),
-                id="multiple composes, , tag source, no additional arguments",
+                id="multiple composes",
             ),
         ],
     )
@@ -126,3 +142,70 @@ class TestODCSRequester:
             odcs_requester(compose_configs=composes_config)
         assert mock_odcs.request_compose.call_count == 1
         assert mock_odcs.wait_for_compose.call_count == 1
+
+    @pytest.mark.parametrize(
+        ("composes_configs", "num_of_failed", "expected_output"),
+        [
+            pytest.param(
+                ODCSComposesConfigs([ODCSComposeConfig(spec=compose_source)]),
+                1,
+                dedent(
+                    """
+                    Failed to generate some composes:
+                    1: state=sentinel.fail_state reason=sentinel.fail_reason
+                    """
+                ).strip(),
+                id="single compose - failed",
+            ),
+            pytest.param(
+                ODCSComposesConfigs(
+                    [
+                        ODCSComposeConfig(spec=compose_source),
+                        ODCSComposeConfig(spec=compose_source),
+                    ]
+                ),
+                1,
+                dedent(
+                    """
+                    Failed to generate some composes:
+                    1: state=sentinel.fail_state reason=sentinel.fail_reason
+                    """
+                ).strip(),
+                id="multiple composes - some failed",
+            ),
+            pytest.param(
+                ODCSComposesConfigs(
+                    [
+                        ODCSComposeConfig(spec=compose_source),
+                        ODCSComposeConfig(spec=compose_source),
+                    ]
+                ),
+                2,
+                dedent(
+                    """
+                    Failed to generate some composes:
+                    1: state=sentinel.fail_state reason=sentinel.fail_reason
+                    2: state=sentinel.fail_state reason=sentinel.fail_reason
+                    """
+                ).strip(),
+                id="multiple composes - all failed",
+            ),
+        ],
+    )
+    def test_odcs_requester_failed_generating(
+        self,
+        create_odcs_mock: Callable,
+        composes_configs: ODCSComposesConfigs,
+        num_of_failed: int,
+        expected_output: str,
+    ) -> None:
+        """test ODCSRequester.__call__ in a scenario in which no exceptions were
+        raised during compose creation, but some of the composes did not finish
+        successfully"""
+
+        mock_odcs = create_odcs_mock(num_of_composes=2, num_of_failed=num_of_failed)
+        odcs_requester = ODCSRequester(odcs=mock_odcs)
+
+        with pytest.raises(RuntimeError) as ex:
+            odcs_requester(compose_configs=composes_configs)
+        assert str(ex.value) == expected_output
