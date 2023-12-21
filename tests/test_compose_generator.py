@@ -45,7 +45,7 @@ class TestComposeGenerator:
 
         mock_config_generator.assert_called_once_with()
         mock_requester.assert_called_once_with(
-            configs=mock_config_generator.return_value
+            compose_configs=mock_config_generator.return_value
         )
         mock_fetcher.assert_called_once_with(
             request_reference=mock_requester.return_value
