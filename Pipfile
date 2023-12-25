@@ -17,6 +17,7 @@ responses = "*"
 types-requests = "*"
 odcs = {extras = ["client"], version = "*"}
 appstudio-tools = {file = ".", editable = true}
+pylint-pytest = "*"
 
 [dev-packages]
 pytest = "*"
