@@ -2,6 +2,7 @@
 from pathlib import Path
 from subprocess import CalledProcessError
 from textwrap import dedent
+from typing import Callable
 from unittest.mock import MagicMock, call, create_autospec, sentinel
 
 import pytest
@@ -19,43 +20,30 @@ from verify_rpms.rpm_verifier import (
 
 
 @pytest.mark.parametrize(
-    ("processed_images", "fail", "expected_print", "expected_fail"),
+    ("processed_images", "expected_print", "expected_failures_exist"),
     [
         pytest.param(
             [ProcessedImage(image="i1", unsigned_rpms=[])],
-            False,
             "No unsigned RPMs found.",
             False,
-            id="No unsigned RPMs + do not fail if unsigned",
-        ),
-        pytest.param(
-            [
-                ProcessedImage(image="i1", unsigned_rpms=[]),
-                ProcessedImage(image="i2", unsigned_rpms=[]),
-            ],
-            True,
-            "No unsigned RPMs found.",
-            False,
-            id="No unsigned RPMs + fail if unsigned",
+            id="No unsigned RPMs + no errors. Do not report failures",
         ),
         pytest.param(
             [ProcessedImage(image="i1", unsigned_rpms=["my-rpm"])],
-            False,
             dedent(
                 """
                 Found unsigned RPMs:
                 i1: my-rpm
                 """
             ).strip(),
-            False,
-            id="1 unsigned + do not fail if unsigned",
+            True,
+            id="Unsigned RPM + no errors. Report failures",
         ),
         pytest.param(
             [
                 ProcessedImage(image="i1", unsigned_rpms=["my-rpm", "another-rpm"]),
                 ProcessedImage(image="i2", unsigned_rpms=[]),
             ],
-            True,
             dedent(
                 """
                 Found unsigned RPMs:
@@ -63,23 +51,7 @@ from verify_rpms.rpm_verifier import (
                 """
             ).strip(),
             True,
-            id="an image with multiple unsigned and another without + fail if unsigned",
-        ),
-        pytest.param(
-            [
-                ProcessedImage(image="i1", unsigned_rpms=["my-rpm", "another-rpm"]),
-                ProcessedImage(image="i2", unsigned_rpms=["their-rpm"]),
-            ],
-            True,
-            dedent(
-                """
-                Found unsigned RPMs:
-                i1: my-rpm, another-rpm
-                i2: their-rpm
-                """
-            ).strip(),
-            True,
-            id="multiple images with unsigned rpms + fail if unsigned",
+            id="An image with multiple unsigned and another without. Report failure",
         ),
         pytest.param(
             [
@@ -88,7 +60,6 @@ from verify_rpms.rpm_verifier import (
                 ),
                 ProcessedImage(image="i2", unsigned_rpms=["their-rpm"]),
             ],
-            True,
             dedent(
                 """
                 Found unsigned RPMs:
@@ -98,7 +69,7 @@ from verify_rpms.rpm_verifier import (
                 """
             ).strip(),
             True,
-            id="Error in running command + image with unsigned rpms + fail if unsigned",
+            id="Error in running command + image with unsigned RPMs. Report failure",
         ),
         pytest.param(
             [
@@ -109,7 +80,6 @@ from verify_rpms.rpm_verifier import (
                     image="i2", unsigned_rpms=[], error="Failed to run second command"
                 ),
             ],
-            True,
             dedent(
                 """
                 Encountered errors:
@@ -118,40 +88,18 @@ from verify_rpms.rpm_verifier import (
                 """
             ).strip(),
             True,
-            id="2 Errors in running command + fail if unsigned",
-        ),
-        pytest.param(
-            [
-                ProcessedImage(
-                    image="i1", unsigned_rpms=[], error="Failed to run first command"
-                ),
-                ProcessedImage(
-                    image="i2", unsigned_rpms=["my-rpm", "another-rpm"], error=""
-                ),
-            ],
-            False,
-            dedent(
-                """
-                Found unsigned RPMs:
-                i2: my-rpm, another-rpm
-                Encountered errors:
-                i1: Failed to run first command
-                """
-            ).strip(),
-            False,
-            id="Errors in running command + image with unsigned rpms + do not fail if unsigned",
+            id="Multiple errors in running command + no unsigned RPMs. Report failure",
         ),
     ],
 )
 def test_generate_output(
     processed_images: list[ProcessedImage],
-    fail: bool,
     expected_print: str,
-    expected_fail: bool,
+    expected_failures_exist: bool,
 ) -> None:
     """Test generate output"""
-    fail_out, print_out = generate_output(processed_images, fail)
-    assert fail_out == expected_fail
+    fail_out, print_out = generate_output(processed_images)
+    assert fail_out == expected_failures_exist
     assert print_out == expected_print
 
 
@@ -353,24 +301,53 @@ class TestMain:
         return mock
 
     @pytest.fixture()
-    def mock_generate_output(self, monkeypatch: MonkeyPatch) -> MagicMock:
-        """Monkey-patched generate_output"""
-        mock = create_autospec(generate_output, return_value=(False, ""))
-        monkeypatch.setattr(rpm_verifier, generate_output.__name__, mock)
-        return mock
+    def create_generate_output_mock(
+        self, monkeypatch: MonkeyPatch
+    ) -> Callable[[bool], MagicMock]:
+        """Create a generate_output mock with different results according to
+        the `fail_unsigned` flag"""
 
+        def _mock_generate_output(with_failures: bool = False) -> MagicMock:
+            """Monkey-patched generate_output"""
+            mock = create_autospec(
+                generate_output, return_value=(with_failures, sentinel.output_gen_out)
+            )
+            monkeypatch.setattr(rpm_verifier, generate_output.__name__, mock)
+            return mock
+
+        return _mock_generate_output
+
+    @pytest.mark.parametrize(
+        "fail_unsigned, has_errors",
+        [
+            pytest.param(
+                False,
+                False,
+                id="Should pass if there are errors, and there are errors.",
+            ),
+            pytest.param(
+                False, True, id="Should pass if there are errors, and there are none."
+            ),
+            pytest.param(
+                True, False, id="Should fail if there are errors, and there are none."
+            ),
+        ],
+    )
     def test_main(
         self,
-        mock_generate_output: MagicMock,
+        create_generate_output_mock: MagicMock,
         mock_image_processor: MagicMock,
+        fail_unsigned: bool,
+        has_errors: bool,
     ) -> None:
         """Test call to rpm_verifier.py main function"""
+        generate_output_mock = create_generate_output_mock(with_failures=has_errors)
         rpm_verifier.main(  # pylint: disable=no-value-for-parameter
             args=[
                 "--input",
                 "img1",
                 "--fail-unsigned",
-                "true",
+                fail_unsigned,
                 "--workdir",
                 "some/path",
             ],
@@ -379,5 +356,30 @@ class TestMain:
         )
 
         assert mock_image_processor.return_value.call_count == 1
+        generate_output_mock.assert_called_once_with([sentinel.output])
         mock_image_processor.return_value.assert_has_calls([call("img1")])
-        mock_generate_output.assert_called_once_with([sentinel.output], True)
+
+    def test_main_fail_on_unsigned_rpm_or_errors(
+        self,
+        create_generate_output_mock: MagicMock,
+        mock_image_processor: MagicMock,
+    ) -> None:
+        """Test call to rpm_verifier.py main function fails
+        when whe 'fail-unsigned' flag is used and there are unsigned RPMs
+        """
+        fail_unsigned: bool = True
+        create_generate_output_mock(with_failures=True)
+        with pytest.raises(SystemExit) as err:
+            rpm_verifier.main(  # pylint: disable=no-value-for-parameter
+                args=[
+                    "--input",
+                    "img1",
+                    "--fail-unsigned",
+                    fail_unsigned,
+                    "--workdir",
+                    "some/path",
+                ],
+                obj={},
+                standalone_mode=False,
+            )
+        assert err.value.code == sentinel.output_gen_out
