@@ -19,6 +19,7 @@ ADD --chown=root:root --chmod=644 data/ca-trust/* /etc/pki/ca-trust/source/ancho
 RUN /usr/bin/fix-permissions /tmp/src \
     && /usr/bin/update-ca-trust
 RUN yum install -y krb5-workstation
+COPY data/kerberos/krb5.conf /etc
 USER 1001
 
 RUN \
