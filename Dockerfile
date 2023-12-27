@@ -18,6 +18,7 @@ ADD . /tmp/src
 ADD --chown=root:root --chmod=644 data/ca-trust/* /etc/pki/ca-trust/source/anchors
 RUN /usr/bin/fix-permissions /tmp/src \
     && /usr/bin/update-ca-trust
+RUN yum install -y krb5-workstation
 USER 1001
 
 RUN \
