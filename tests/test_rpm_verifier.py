@@ -5,6 +5,7 @@ from textwrap import dedent
 from unittest.mock import MagicMock, call, create_autospec, sentinel
 
 import pytest
+from pydantic import ValidationError
 from pytest import MonkeyPatch
 
 from verify_rpms import rpm_verifier
@@ -198,20 +199,18 @@ def test_get_unsigned_rpms(test_input: list[str], expected: list[str]) -> None:
             dedent(
                 """
                 {
-                    "spec": {
-                        "application": "test",
-                        "components": [
-                            {
-                                "containerImage": "quay.io/container-image@sha256:123"
-                            },
-                            {
-                                "containerImage": "quay.io/container-image@sha256:456"
-                            },      
-                            {
-                                "containerImage": "quay.io/container-image@sha256:789"
-                            }
-                        ]
-                    }
+                    "application": "test",
+                    "components": [
+                        {
+                            "containerImage": "quay.io/container-image@sha256:123"
+                        },
+                        {
+                            "containerImage": "quay.io/container-image@sha256:456"
+                        },
+                        {
+                            "containerImage": "quay.io/container-image@sha256:789"
+                        }
+                    ]
                 }
                 """
             ).strip(),
@@ -238,8 +237,9 @@ def test_parse_image_input(test_input: str, expected: list[str]) -> None:
 def test_parse_image_input_exception() -> None:
     """Test parse_image_input throws exception"""
     test_input = '{"apiVersion": "appstudio.redhat.com/v1alpha1"}'
-    with pytest.raises(KeyError):
+    with pytest.raises(ValidationError) as ve:
         parse_image_input(image_input=test_input)
+    assert [err["type"] for err in ve.value.errors()] == ["missing"]
 
 
 class TestImageProcessor:

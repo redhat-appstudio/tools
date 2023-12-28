@@ -6,12 +6,14 @@ import sys
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from json import JSONDecodeError, loads
 from pathlib import Path
 from subprocess import CalledProcessError, run
 from typing import Callable, Iterable
 
 import click
+from pydantic import ValidationError
+
+from .snapshot import Snapshot
 
 
 @dataclass(frozen=True)
@@ -103,12 +105,12 @@ def parse_image_input(image_input: str) -> list[str]:
     If failing to parse as json, assume it's an image reference as one-element list.
     """
     try:
-        snapshot = loads(s=image_input)
-    except JSONDecodeError:
-        return [image_input]
-    components = snapshot["spec"]["components"]
-    container_images = [component["containerImage"] for component in components]
-    return container_images
+        snapshot = Snapshot.model_validate_json(image_input)
+    except ValidationError as ve:
+        if "json_invalid" in [err["type"] for err in ve.errors()]:
+            return [image_input]
+        raise ve
+    return [c.container_image for c in snapshot.components]
 
 
 @dataclass(frozen=True)
