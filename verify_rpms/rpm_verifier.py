@@ -106,9 +106,7 @@ def parse_image_input(image_input: str) -> list[str]:
         snapshot = loads(s=image_input)
     except JSONDecodeError:
         return [image_input]
-    components = snapshot["spec"]["components"]
-    container_images = [component["containerImage"] for component in components]
-    return container_images
+    return [component["containerImage"] for component in snapshot["components"]]
 
 
 @dataclass(frozen=True)

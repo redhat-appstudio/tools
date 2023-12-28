@@ -198,20 +198,18 @@ def test_get_unsigned_rpms(test_input: list[str], expected: list[str]) -> None:
             dedent(
                 """
                 {
-                    "spec": {
-                        "application": "test",
-                        "components": [
-                            {
-                                "containerImage": "quay.io/container-image@sha256:123"
-                            },
-                            {
-                                "containerImage": "quay.io/container-image@sha256:456"
-                            },      
-                            {
-                                "containerImage": "quay.io/container-image@sha256:789"
-                            }
-                        ]
-                    }
+                    "application": "test",
+                    "components": [
+                        {
+                            "containerImage": "quay.io/container-image@sha256:123"
+                        },
+                        {
+                            "containerImage": "quay.io/container-image@sha256:456"
+                        },
+                        {
+                            "containerImage": "quay.io/container-image@sha256:789"
+                        }
+                    ]
                 }
                 """
             ).strip(),
