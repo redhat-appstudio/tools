@@ -57,5 +57,7 @@ def test_odcs_fetcher(tmp_path: Path, composes: list[str], urls: list[str]) -> N
     files_content = [
         p.read_text(encoding="utf-8") for p in out.compose_dir_path.iterdir()
     ]
+    extensions = [p.suffix for p in out.compose_dir_path.iterdir()]
 
     assert set(composes) == set(files_content)
+    assert set(extensions) == set([".repo"])
