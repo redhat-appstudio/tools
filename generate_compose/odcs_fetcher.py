@@ -32,7 +32,7 @@ class ODCSFetcher(ComposeFetcher):
         urls = request_reference.compose_urls
         for url in urls:
             with tempfile.NamedTemporaryFile(
-                delete=False, dir=self.compose_dir_path
+                delete=False, dir=self.compose_dir_path, suffix=".repo"
             ) as compose_path:
                 response = requests.get(url, timeout=10)
                 response.raise_for_status()
