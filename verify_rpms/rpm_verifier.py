@@ -155,7 +155,18 @@ class ImageProcessor:
     type=click.Path(path_type=Path),
     required=True,
 )
-def main(img_input: str, fail_unsigned: bool, workdir: Path) -> None:
+@click.option(
+    "--status-path",
+    help="Path in which the status will be written to",
+    type=click.Path(path_type=Path),
+    required=True,
+)
+def main(
+    img_input: str,
+    fail_unsigned: bool,
+    workdir: Path,
+    status_path: Path,
+) -> None:
     """Verify RPMs are signed"""
 
     container_images = parse_image_input(img_input)
@@ -166,8 +177,12 @@ def main(img_input: str, fail_unsigned: bool, workdir: Path) -> None:
             processor, container_images
         )
 
-    failures_occured, output = generate_output(list(processed_images))
-    if failures_occured and fail_unsigned:
+    failures_occurred, output = generate_output(list(processed_images))
+    if failures_occurred:
+        status_path.write_text("ERROR")
+    else:
+        status_path.write_text("SUCCESS")
+    if failures_occurred and fail_unsigned:
         sys.exit(output)
     print(output)
 
