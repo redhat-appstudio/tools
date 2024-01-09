@@ -3,7 +3,7 @@ from pathlib import Path
 from subprocess import CalledProcessError
 from textwrap import dedent
 from typing import Callable
-from unittest.mock import MagicMock, call, create_autospec, sentinel
+from unittest.mock import MagicMock, call, create_autospec
 
 import pytest
 from pytest import MonkeyPatch
@@ -295,7 +295,7 @@ class TestMain:
         """Monkey-patched ImageProcessor"""
         mock: MagicMock = create_autospec(
             ImageProcessor,
-            return_value=MagicMock(return_value=sentinel.output),
+            return_value=MagicMock(return_value="some output"),
         )
         monkeypatch.setattr(rpm_verifier, ImageProcessor.__name__, mock)
         return mock
@@ -310,12 +310,17 @@ class TestMain:
         def _mock_generate_output(with_failures: bool = False) -> MagicMock:
             """Monkey-patched generate_output"""
             mock = create_autospec(
-                generate_output, return_value=(with_failures, sentinel.output_gen_out)
+                generate_output, return_value=(with_failures, "some output")
             )
             monkeypatch.setattr(rpm_verifier, generate_output.__name__, mock)
             return mock
 
         return _mock_generate_output
+
+    @pytest.fixture()
+    def status_path(self, tmp_path: Path) -> Path:
+        """Status temp file"""
+        return tmp_path / "status"
 
     @pytest.mark.parametrize(
         "fail_unsigned, has_errors",
@@ -333,12 +338,13 @@ class TestMain:
             ),
         ],
     )
-    def test_main(
+    def test_main(  # pylint: disable=too-many-arguments
         self,
         create_generate_output_mock: MagicMock,
         mock_image_processor: MagicMock,
         fail_unsigned: bool,
         has_errors: bool,
+        status_path: Path,
     ) -> None:
         """Test call to rpm_verifier.py main function"""
         generate_output_mock = create_generate_output_mock(with_failures=has_errors)
@@ -350,25 +356,33 @@ class TestMain:
                 fail_unsigned,
                 "--workdir",
                 "some/path",
+                "--status-path",
+                str(status_path),
             ],
             obj={},
             standalone_mode=False,
         )
-
+        if has_errors:
+            assert status_path.read_text() == "ERROR"
+        else:
+            assert status_path.read_text() == "SUCCESS"
         assert mock_image_processor.return_value.call_count == 1
-        generate_output_mock.assert_called_once_with([sentinel.output])
+        generate_output_mock.assert_called_once_with(
+            [mock_image_processor.return_value.return_value]
+        )
         mock_image_processor.return_value.assert_has_calls([call("img1")])
 
     def test_main_fail_on_unsigned_rpm_or_errors(
         self,
         create_generate_output_mock: MagicMock,
-        mock_image_processor: MagicMock,
+        mock_image_processor: MagicMock,  # pylint: disable=unused-argument
+        status_path: Path,
     ) -> None:
         """Test call to rpm_verifier.py main function fails
         when whe 'fail-unsigned' flag is used and there are unsigned RPMs
         """
         fail_unsigned: bool = True
-        create_generate_output_mock(with_failures=True)
+        mock = create_generate_output_mock(with_failures=True)
         with pytest.raises(SystemExit) as err:
             rpm_verifier.main(  # pylint: disable=no-value-for-parameter
                 args=[
@@ -378,8 +392,11 @@ class TestMain:
                     fail_unsigned,
                     "--workdir",
                     "some/path",
+                    "--status-path",
+                    str(status_path),
                 ],
                 obj={},
                 standalone_mode=False,
             )
-        assert err.value.code == sentinel.output_gen_out
+        assert status_path.read_text() == "ERROR"
+        assert err.value.code == mock.return_value[1]
