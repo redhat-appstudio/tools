@@ -34,7 +34,12 @@ def main(
     Get inputs from container and content_sets YAMLs and relay them to an ODCS
     compose generator that will request a compose and store it in a TBD location.
     """
-    compose_inputs: dict = yaml.safe_load(compose_input_yaml_path.read_text())
+    try:
+        compose_inputs: dict = yaml.safe_load(compose_input_yaml_path.read_text())
+    except FileNotFoundError as ex:
+        raise FileNotFoundError(
+            f"Could not find compose input file at {compose_input_yaml_path.resolve()}"
+        ) from ex
 
     compose_generator = ComposeGenerator(
         configurations_generator=ODCSConfigurationsGenerator(

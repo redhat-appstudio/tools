@@ -97,3 +97,25 @@ class TestODCSComposeGenerator:
             fetcher=mock_fetcher.return_value,
         )
         mock_compose_generator.return_value.assert_called_once_with()
+
+    def test_main_missing_input_file(  # pylint: disable=too-many-arguments
+        self,
+        compose_dir_path: Path,
+    ) -> None:
+        """Test call to odcs_compose_generator.py main function"""
+        input_yaml = Path("no/such/file")
+        with pytest.raises(FileNotFoundError) as ex:
+            odcs_compose_generator.main(  # pylint: disable=no-value-for-parameter
+                args=[
+                    "--compose-dir-path",
+                    str(compose_dir_path),
+                    "--compose-input-yaml-path",
+                    str(input_yaml),
+                ],
+                obj={},
+                standalone_mode=False,
+            )
+        assert (
+            str(ex.value)
+            == f"Could not find compose input file at {input_yaml.resolve()}"
+        )
