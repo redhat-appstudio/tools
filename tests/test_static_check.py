@@ -1,4 +1,5 @@
 """Static checks"""
+
 from subprocess import run
 from typing import Final
 

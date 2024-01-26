@@ -1,4 +1,5 @@
 """compose generator protocols"""
+
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import ClassVar, Mapping, Protocol

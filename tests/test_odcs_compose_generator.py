@@ -1,4 +1,5 @@
 """Test odcs_compose_generator.py end-to-end"""
+
 from pathlib import Path
 from unittest.mock import MagicMock, create_autospec
 

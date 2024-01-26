@@ -1,4 +1,5 @@
 """Test ComposeGenerator class using mock dependencies"""
+
 from unittest.mock import MagicMock, create_autospec
 
 import pytest

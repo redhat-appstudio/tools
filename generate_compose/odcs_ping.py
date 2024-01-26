@@ -1,4 +1,5 @@
 """Check connectivity to ODCS"""
+
 import sys
 
 import click
