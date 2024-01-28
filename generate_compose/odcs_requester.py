@@ -1,4 +1,5 @@
 """Request a new ODCS compose"""
+
 from dataclasses import dataclass
 
 from odcs.client.odcs import ODCS, AuthMech  # type: ignore

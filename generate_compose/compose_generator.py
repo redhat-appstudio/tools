@@ -1,4 +1,5 @@
 """Top level generic entity for creating a compose"""
+
 from dataclasses import dataclass
 
 from .protocols import (

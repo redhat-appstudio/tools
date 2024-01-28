@@ -1,4 +1,5 @@
 """Test rpm_verifier.py end-to-end"""
+
 from pathlib import Path
 from subprocess import CalledProcessError
 from textwrap import dedent

@@ -1,4 +1,5 @@
 """test_odcs_requester.py - test odcs_requester"""
+
 from textwrap import dedent
 from typing import Callable
 from unittest.mock import MagicMock, call, create_autospec, sentinel
@@ -49,12 +50,12 @@ class TestODCSRequester:
                     {
                         "result_repofile": f"{compose_url}",
                         "id": i,
-                        "state_name": "done"
-                        if i > num_of_failed
-                        else sentinel.fail_state,
-                        "state_reason": "ok"
-                        if i > num_of_failed
-                        else sentinel.fail_reason,
+                        "state_name": (
+                            "done" if i > num_of_failed else sentinel.fail_state
+                        ),
+                        "state_reason": (
+                            "ok" if i > num_of_failed else sentinel.fail_reason
+                        ),
                     }
                     for i in range(1, num_of_composes + 1)
                 ]
