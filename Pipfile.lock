@@ -556,9 +556,10 @@
                 "client"
             ],
             "hashes": [
-                "sha256:e5f47dd07224294cd6a85771726b4e8406cd3425a8345d3ac5550e363d776c51"
+                "sha256:2910f002acc52f851c761798bb4448daaa0ced85b80a448891ac171a0b016c8a"
             ],
-            "version": "==0.7.0"
+            "index": "pypi",
+            "version": "==0.8.0"
         },
         "openidc-client": {
             "hashes": [
