@@ -26,9 +26,23 @@ from .odcs_requester import ODCSRequester
     type=click.Path(path_type=Path),
     required=True,
 )
+@click.option(
+    "--client-id",
+    help="Client ID used for authenticating with ODCS",
+    type=click.STRING,
+    envvar="CLIENT_ID",
+)
+@click.option(
+    "--client-secret",
+    help="Client secret used for generating OIDC token",
+    type=click.STRING,
+    envvar="CLIENT_SECRET",
+)
 def main(
     compose_dir_path: Path,
     compose_input_yaml_path: Path,
+    client_id: str,
+    client_secret: str,
 ):
     """
     Get inputs from container and content_sets YAMLs and relay them to an ODCS
@@ -45,7 +59,7 @@ def main(
         configurations_generator=ODCSConfigurationsGenerator(
             compose_inputs=compose_inputs,
         ),
-        requester=ODCSRequester(),
+        requester=ODCSRequester(client_id=client_id, client_secret=client_secret),
         fetcher=ODCSFetcher(compose_dir_path=compose_dir_path),
     )
     compose_generator()

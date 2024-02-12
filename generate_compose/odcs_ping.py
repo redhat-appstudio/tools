@@ -4,7 +4,8 @@ import sys
 
 import click
 import requests
-from odcs.client.odcs import ODCS, AuthMech  # type: ignore
+
+from .odcs_session import get_odcs_session
 
 
 def check_about(odcs):
@@ -56,9 +57,25 @@ def check_new_compose(odcs):
     default="https://odcs.engineering.redhat.com",
     metavar="URL",
 )
-def main(server):
+@click.option(
+    "--client-id",
+    help="Client ID used for authenticating with ODCS",
+    type=click.STRING,
+    envvar="CLIENT_ID",
+)
+@click.option(
+    "--client-secret",
+    help="Client secret used for generating OIDC token",
+    type=click.STRING,
+    envvar="CLIENT_SECRET",
+)
+def main(server: str, client_id: str, client_secret: str):
     """Check connectivity to ODCS"""
-    odcs = ODCS(server, auth_mech=AuthMech.Kerberos)
+    odcs = get_odcs_session(
+        client_id=client_id,
+        client_secret=client_secret,
+        odcs_server=server,
+    )
 
     check_about(odcs)
     print()

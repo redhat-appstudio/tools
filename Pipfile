@@ -18,6 +18,7 @@ types-requests = "*"
 odcs = {extras = ["client"], version = "*"}
 appstudio-tools = {file = ".", editable = true}
 pylint-pytest = "*"
+authlib = "*"
 
 [dev-packages]
 pytest = "*"

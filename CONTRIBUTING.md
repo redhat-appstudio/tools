@@ -20,17 +20,14 @@ Within the container, all the tools will be available in `$PATH`.
 
 ### Checking for ODCS connectivity:
 
-You will need to obtain a keytab file with credentials for an account that
-can use ODCS. The `odcs_ping` tool can then be used to check the connectivity.
+You will need to obtain an OIDC service account that can use ODCS. The `odcs_ping` tool
+can then be used to check the connectivity.
 ```
 podman run -it --rm \
-    -e KRB5CCNAME=/tmp/foo \
-    -e KRB5_CLIENT_KTNAME=/tmp/kt \
-    -v $KT_PATH:/tmp/kt:Z \
+    -e CLIENT_ID=<client_id> \
+    -e CLIENT_SECRET=<client-secret> \
     appstudio-tools odcs_ping
 ```
-(Here we assume the path to a local copy of an appropriate keytab file was
-stored in the `$KT_PATH` variable).
 
 If everything goes well, the output will resemble the following (Some
 parts omitted for brevity):
@@ -45,5 +42,5 @@ Allowed groups:
 Attempting to generate a compose
 Compose done:
   repo file at: http://.../odcs-1234567.repo
-  owner: your-keytab-user-here
+  owner: your-oidc-user-here
 ```

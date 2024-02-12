@@ -9,6 +9,7 @@ from odcs.client.odcs import ODCS, ComposeSourceGeneric  # type: ignore
 from requests.exceptions import HTTPError
 
 from generate_compose.odcs_requester import ODCSRequester
+from generate_compose.odcs_session import get_odcs_session
 from generate_compose.protocols import (
     ODCSComposeConfig,
     ODCSComposesConfigs,
@@ -96,7 +97,12 @@ class TestODCSRequester:
         """test ODCSRequester.__call__"""
         num_of_composes: int = len(composes_configs.configs)
         mock_odcs = create_odcs_mock(num_of_composes)
-        odcs_requester = ODCSRequester(odcs=mock_odcs)
+        odcs_session_getter = create_autospec(get_odcs_session, return_value=mock_odcs)
+        odcs_requester = ODCSRequester(
+            client_id="some-client",
+            client_secret="some-secret",
+            odcs_session_getter=odcs_session_getter,
+        )
         req_ref = odcs_requester(compose_configs=composes_configs)
 
         expected_calls = [
@@ -121,7 +127,12 @@ class TestODCSRequester:
     ) -> None:
         """test ODCSRequester.__call__ raise an exception when the compose fails"""
         mock_odcs = create_odcs_mock(exception=True)
-        odcs_requester = ODCSRequester(odcs=mock_odcs)
+        odcs_session_getter = create_autospec(get_odcs_session, return_value=mock_odcs)
+        odcs_requester = ODCSRequester(
+            client_id="some-client",
+            client_secret="some-secret",
+            odcs_session_getter=odcs_session_getter,
+        )
         composes_config = ODCSComposesConfigs([ODCSComposeConfig(spec=compose_source)])
         with pytest.raises(HTTPError):
             odcs_requester(compose_configs=composes_config)
@@ -136,7 +147,12 @@ class TestODCSRequester:
         mock_odcs = create_odcs_mock(exception=False)
         mock_odcs.wait_for_compose.side_effect = RuntimeError
 
-        odcs_requester = ODCSRequester(odcs=mock_odcs)
+        odcs_session_getter = create_autospec(get_odcs_session, return_value=mock_odcs)
+        odcs_requester = ODCSRequester(
+            client_id="some-client",
+            client_secret="some-secret",
+            odcs_session_getter=odcs_session_getter,
+        )
         composes_config = ODCSComposesConfigs([ODCSComposeConfig(spec=compose_source)])
 
         with pytest.raises(RuntimeError):
@@ -205,7 +221,12 @@ class TestODCSRequester:
         successfully"""
 
         mock_odcs = create_odcs_mock(num_of_composes=2, num_of_failed=num_of_failed)
-        odcs_requester = ODCSRequester(odcs=mock_odcs)
+        odcs_session_getter = create_autospec(get_odcs_session, return_value=mock_odcs)
+        odcs_requester = ODCSRequester(
+            client_id="some-client",
+            client_secret="some-secret",
+            odcs_session_getter=odcs_session_getter,
+        )
 
         with pytest.raises(RuntimeError) as ex:
             odcs_requester(compose_configs=composes_configs)
