@@ -1,10 +1,12 @@
 """Request a new ODCS compose"""
 
 from dataclasses import dataclass
+from typing import Callable
 
-from odcs.client.odcs import ODCS, AuthMech  # type: ignore
+from odcs.client.odcs import ODCS  # type: ignore
 
 from .odcs_configurations_generator import ODCSComposesConfigs
+from .odcs_session import get_odcs_session
 from .protocols import ComposeRequester, ODCSRequestReferences
 
 
@@ -15,18 +17,23 @@ class ODCSRequester(ComposeRequester):
     to the remote compose location.
     """
 
-    odcs: ODCS = ODCS(
-        "https://odcs.engineering.redhat.com/", auth_mech=AuthMech.Kerberos
-    )
+    client_id: str
+    client_secret: str
+    odcs_session_getter: Callable[[str, str, str], ODCS] = get_odcs_session
 
     def __call__(self, compose_configs: ODCSComposesConfigs) -> ODCSRequestReferences:
+        odcs: ODCS = self.odcs_session_getter(
+            self.client_id,
+            self.client_secret,
+            "https://odcs.engineering.redhat.com/",
+        )
         composes = [
-            self.odcs.request_compose(config.spec, **config.additional_args)
+            odcs.request_compose(config.spec, **config.additional_args)
             for config in compose_configs.configs
         ]
 
         finished_composes = [
-            self.odcs.wait_for_compose(compose["id"]) for compose in composes
+            odcs.wait_for_compose(compose["id"]) for compose in composes
         ]
 
         failed_composes = [
