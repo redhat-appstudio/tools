@@ -378,6 +378,10 @@ spec:
     - name: update-tekton-tools
       runAfter:
       - sbom-json-check
+      - sast-snyk-check
+      - clamav-scan
+      - clair-scan
+      - deprecated-base-image-check
       workspaces:
       - name: artifacts
         workspace: workspace
@@ -387,8 +391,6 @@ spec:
       params:
         - name: ORIGIN_REPO
           value: $(params.git-url)
-        - name: REVISION
-          value: $(params.revision)
         - name: ARTIFACTS_PATH
           value: /workspace/artifacts/source
         - name: TARGET_GH_REPO
@@ -396,7 +398,7 @@ spec:
         - name: SCRIPT
           value: |
             set -ex
-            grep -rl quay.io/redhat-user-workloads/rhtap-o11y-tenant/tools/tools:.* . | xargs sed -i s@quay.io/redhat-user-workloads/rhtap-o11y-tenant/tools/tools:.*@quay.io/redhat-user-workloads/rhtap-o11y-tenant/tools/tools:$(params.REVISION)@gm
+            grep -rl quay.io/redhat-user-workloads/rhtap-o11y-tenant/tools/tools:.* . | xargs sed -i s@quay.io/redhat-user-workloads/rhtap-o11y-tenant/tools/tools:.*@quay.io/redhat-user-workloads/rhtap-o11y-tenant/tools/tools:$(params.revision)@gm
     workspaces:
     - name: workspace
     - name: git-auth
