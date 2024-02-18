@@ -395,6 +395,8 @@ spec:
           value: /workspace/artifacts/source
         - name: TARGET_GH_REPO
           value: redhat-appstudio/tekton-tools
+        - name: REVISION
+          value: $(params.revision)
         - name: SCRIPT
           value: |
             set -ex
