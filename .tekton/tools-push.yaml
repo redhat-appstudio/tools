@@ -395,10 +395,11 @@ spec:
           value: /workspace/artifacts/source
         - name: TARGET_GH_REPO
           value: redhat-appstudio/tekton-tools
+        - name: REVISION
+          value: $(params.revision)
         - name: SCRIPT
           value: |
             set -ex
-            
             grep -rl quay.io/redhat-user-workloads/rhtap-o11y-tenant/tools/tools:.* . | xargs sed -i s@quay.io/redhat-user-workloads/rhtap-o11y-tenant/tools/tools:.*@quay.io/redhat-user-workloads/rhtap-o11y-tenant/tools/tools:$(params.revision)@gm
     workspaces:
     - name: workspace
