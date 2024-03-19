@@ -19,6 +19,7 @@ odcs = {extras = ["client"], version = "*"}
 appstudio-tools = {file = ".", editable = true}
 pylint-pytest = "*"
 authlib = "*"
+kubernetes = "*"
 
 [dev-packages]
 pytest = "*"
