@@ -3,7 +3,12 @@
 from subprocess import run
 from typing import Final
 
-PKGS: Final[list[str]] = ["tests", "generate_compose", "verify_rpms"]
+PKGS: Final[list[str]] = [
+    "tests",
+    "generate_compose",
+    "verify_rpms",
+    "clean_spacerequests",
+]
 
 
 def test_mypy() -> None:
