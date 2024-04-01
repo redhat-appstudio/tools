@@ -8,7 +8,6 @@ metadata:
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch
       == "main"
-    pipelinesascode.tekton.dev/task: tasks/update_private_repo.yaml
   creationTimestamp: null
   labels:
     appstudio.openshift.io/application: tools
@@ -375,32 +374,6 @@ spec:
         operator: in
         values:
         - "false"
-    - name: update-tekton-tools
-      runAfter:
-      - sbom-json-check
-      - sast-snyk-check
-      - clamav-scan
-      - clair-scan
-      - deprecated-base-image-check
-      workspaces:
-      - name: artifacts
-        workspace: workspace
-      taskRef:
-        name: create-pull-request
-        kind: Task
-      params:
-        - name: ORIGIN_REPO
-          value: $(params.git-url)
-        - name: ARTIFACTS_PATH
-          value: /workspace/artifacts/source
-        - name: TARGET_GH_REPO
-          value: redhat-appstudio/tekton-tools
-        - name: REVISION
-          value: $(params.revision)
-        - name: SCRIPT
-          value: |
-            set -ex
-            grep -rl quay.io/redhat-user-workloads/rhtap-o11y-tenant/tools/tools:.* . | xargs sed -i s@quay.io/redhat-user-workloads/rhtap-o11y-tenant/tools/tools:.*@quay.io/redhat-user-workloads/rhtap-o11y-tenant/tools/tools:$(params.revision)@gm
     workspaces:
     - name: workspace
     - name: git-auth
