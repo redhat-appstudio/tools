@@ -1,4 +1,4 @@
-FROM registry.access.redhat.com/ubi9/python-311:1-66.1719293317
+FROM registry.access.redhat.com/ubi9/python-311:1-66.1719562241
 
 LABEL \
     description="Tools for Red Hat AppStudio" \
