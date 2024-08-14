@@ -3,7 +3,6 @@
 ## Python local development prerequisites
 * Python 3.11
 * pipenv (At least 2022.4.20)
-* yum packages: krb5-devel, gcc, python3.11-devel
 
 ## Working with the container image
 
