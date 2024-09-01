@@ -6,7 +6,7 @@ from typing import Final
 PKGS: Final[list[str]] = [
     "tests",
     "generate_compose",
-    "verify_rpms",
+    "rpms_signature_scan",
     "clean_spacerequests",
 ]
 
