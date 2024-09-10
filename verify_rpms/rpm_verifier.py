@@ -1,33 +1,41 @@
 #!/usr/bin/env python3
 
 """Verify RPMs are signed"""
-
 import sys
 import tempfile
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from json import JSONDecodeError, loads
 from pathlib import Path
 from subprocess import CalledProcessError, run
-from typing import Callable, Iterable
+from typing import Callable
 
 import click
 
 
 @dataclass(frozen=True)
 class ProcessedImage:
-    """Unsigned RPMs for a single image"""
+    """
+    A class to hold data about rpms for single image:
+    Image name,
+    Unsigned RPMs,
+    Errors
+    """
 
     image: str
     unsigned_rpms: list[str]
     error: str = ""
 
     def __str__(self) -> str:
-        return f"{self. image}: {', '.join(self.unsigned_rpms)}"
+        return f"{self.image}: {', '.join(self.unsigned_rpms)}"
 
 
 def get_rpmdb(container_image: str, target_dir: Path, runner: Callable = run) -> Path:
-    """Extract RPM DB from a given container image reference"""
+    """
+    Extract RPM DB from a given container image reference
+    :param container_image: the image to extract
+    :param target_dir: the directory to extract the DB to
+    :param runner: subprocess.run to run CLI commands
+    :return: Path of the directory the DB extracted to
+    """
     runner(
         [
             "oc",
@@ -44,20 +52,19 @@ def get_rpmdb(container_image: str, target_dir: Path, runner: Callable = run) ->
     return target_dir
 
 
-def get_unsigned_rpms(rpmdb: Path, runner: Callable = run) -> list[str]:
+def get_rpms_data(rpmdb: Path, runner: Callable = run) -> list[str]:
     """
-    Get all unsigned RPMs from RPM DB path
-    Filter and return the unsigned RPMs
+    Get RPMs data from RPM DB
     :param rpmdb: path to RPM DB folder
     :param runner: subprocess.run to run CLI commands
-    :return: list of unsigned RPMs within the folder
+    :return: list of RPMs with their signature information
     """
     rpm_strs = runner(
-        [
+        [  # pylint: disable=duplicate-code
             "rpm",
             "-qa",
             "--qf",
-            "%{NAME}-%{VERSION}-%{RELEASE} %{SIGGPG:pgpsig} %{SIGPGP:pgpsig}\n",
+            "%{NAME}-%{VERSION}-%{RELEASE} %{SIGPGP:pgpsig}\n",
             "--dbpath",
             str(rpmdb),
         ],
@@ -65,64 +72,65 @@ def get_unsigned_rpms(rpmdb: Path, runner: Callable = run) -> list[str]:
         text=True,
         check=True,
     ).stdout.splitlines()
-    return [
+    return rpm_strs
+
+
+def get_unsigned_rpms(rpms: list[str]) -> list[str]:
+    """
+    Get all unsigned RPMs from the list of RPMs
+    Filters out the `gpg-pubkey` and return the unsigned RPMs
+    :param rpms: list of RPMs
+    :return: list of unsigned RPMs
+    """
+    unsigned_rpms: list[str] = [
         rpm.split()[0]
-        for rpm in rpm_strs
+        for rpm in rpms
         if "Key ID" not in rpm and not rpm.startswith("gpg-pubkey")
     ]
 
+    return unsigned_rpms
 
-def generate_output(processed_images: Iterable[ProcessedImage]) -> tuple[bool, str]:
+
+def generate_output(processed_image: ProcessedImage) -> tuple[bool, str]:
     """
     Generate the output that should be printed to the user based on the processed images
     results.
-
-    :param processed_images: each element contains a name and a list of unsigned images
-
+    :param processed_image: ProcessedImage that contains all the rpms information
     :returns: The status and summary of the image processing.
     """
-    failures = True
-    with_unsigned_rpms = [img for img in processed_images if img.unsigned_rpms]
-    with_error = [img for img in processed_images if img.error]
-    if not with_unsigned_rpms and not with_error:
-        output = "No unsigned RPMs found."
-        failures = False
+    failure = True
+
+    if not processed_image.unsigned_rpms and not processed_image.error:
+        output = f"No unsigned RPMs in {processed_image.image}"
+        failure = False
     else:
-        output = "\n".join([str(img) for img in with_unsigned_rpms])
-        output = f"Found unsigned RPMs:\n{output}" if with_unsigned_rpms else ""
-        error_str = "\n".join([f"{img.image}: {img.error}" for img in with_error])
-        output = f"{output}\nEncountered errors:\n{error_str}" if error_str else output
-    return failures, output.lstrip()
-
-
-def parse_image_input(image_input: str) -> list[str]:
-    """
-    Input is either an image reference or snapshot data in json format.
-    Try parsing as json and extract the images.
-    If failing to parse as json, assume it's an image reference as one-element list.
-    """
-    try:
-        snapshot = loads(s=image_input)
-    except JSONDecodeError:
-        return [image_input]
-    return [component["containerImage"] for component in snapshot["components"]]
+        output = (
+            f"Found unsigned RPMs in {processed_image.image}:\n{processed_image.unsigned_rpms}"
+            if processed_image.unsigned_rpms
+            else f"Encountered errors in {processed_image.image}:\n{processed_image.error}"
+        )
+    return failure, output.lstrip()
 
 
 @dataclass(frozen=True)
 class ImageProcessor:
-    """Find unsigned RPMs provided an image"""
+    """
+    Populate RPMs data for all images
+    """
 
     workdir: Path
     db_getter: Callable[[str, Path], Path] = get_rpmdb
-    rpms_getter: Callable[[Path], list[str]] = get_unsigned_rpms
+    rpms_getter: Callable[[Path], list[str]] = get_rpms_data
+    unsigned_rpms_getter: Callable[[list[str]], list[str]] = get_unsigned_rpms
 
     def __call__(self, img: str) -> ProcessedImage:
         with tempfile.TemporaryDirectory(
             dir=str(self.workdir), prefix="rpmdb"
         ) as tmpdir:
             try:
-                rpm_db = self.db_getter(img, Path(tmpdir))
-                unsigned_rpms = self.rpms_getter(rpm_db)
+                rpms_db = self.db_getter(img, Path(tmpdir))
+                rpms_data = self.rpms_getter(rpms_db)
+                unsigned_rpms = self.unsigned_rpms_getter(rpms_data)
             except CalledProcessError as err:
                 return ProcessedImage(
                     image=img,
@@ -169,15 +177,10 @@ def main(
 ) -> None:
     """Verify RPMs are signed"""
 
-    container_images = parse_image_input(img_input)
-
     processor = ImageProcessor(workdir=workdir)
-    with ThreadPoolExecutor() as executor:
-        processed_images: Iterable[ProcessedImage] = executor.map(
-            processor, container_images
-        )
+    processed_image = processor(img=img_input)
 
-    failures_occurred, output = generate_output(list(processed_images))
+    failures_occurred, output = generate_output(processed_image=processed_image)
     if failures_occurred:
         status_path.write_text("ERROR")
     else:
