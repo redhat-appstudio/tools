@@ -356,11 +356,6 @@ class TestMain:
 
         return _mock_generate_output
 
-    @pytest.fixture()
-    def status_path(self, tmp_path: Path) -> Path:
-        """Status temp file"""
-        return tmp_path / "status"
-
     @pytest.mark.parametrize(
         ("fail_unsigned", "has_errors"),
         [
@@ -383,9 +378,10 @@ class TestMain:
         mock_image_processor: MagicMock,
         fail_unsigned: bool,
         has_errors: bool,
-        status_path: Path,
+        tmp_path: Path,
     ) -> None:
         """Test call to rpm_verifier.py main function"""
+        status_path = tmp_path / "status"
         generate_output_mock = create_generate_output_mock(with_failures=has_errors)
         rpm_verifier.main(  # pylint: disable=no-value-for-parameter
             args=[
@@ -394,9 +390,7 @@ class TestMain:
                 "--fail-unsigned",
                 fail_unsigned,
                 "--workdir",
-                "some/path",
-                "--status-path",
-                str(status_path),
+                tmp_path,
             ],
             obj={},
             standalone_mode=False,
@@ -415,11 +409,12 @@ class TestMain:
         self,
         create_generate_output_mock: MagicMock,
         mock_image_processor: MagicMock,  # pylint: disable=unused-argument
-        status_path: Path,
+        tmp_path: Path,
     ) -> None:
         """Test call to rpm_verifier.py main function fails
         when whe 'fail-unsigned' flag is used and there are unsigned RPMs
         """
+        status_path = tmp_path / "status"
         fail_unsigned: bool = True
         generate_output_mock = create_generate_output_mock(with_failures=True)
         with pytest.raises(SystemExit) as err:
@@ -430,9 +425,7 @@ class TestMain:
                     "--fail-unsigned",
                     fail_unsigned,
                     "--workdir",
-                    "some/path",
-                    "--status-path",
-                    str(status_path),
+                    tmp_path,
                 ],
                 obj={},
                 standalone_mode=False,
