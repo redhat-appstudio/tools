@@ -163,20 +163,13 @@ class ImageProcessor:
     type=click.Path(path_type=Path),
     required=True,
 )
-@click.option(
-    "--status-path",
-    help="Path in which the status will be written to",
-    type=click.Path(path_type=Path),
-    required=True,
-)
 def main(
     img_input: str,
     fail_unsigned: bool,
     workdir: Path,
-    status_path: Path,
 ) -> None:
     """Verify RPMs are signed"""
-
+    status_path: Path = workdir / "status"
     processor = ImageProcessor(workdir=workdir)
     processed_image = processor(img=img_input)
 
