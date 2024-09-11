@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 
 """Verify RPMs are signed"""
+import json
 import sys
 import tempfile
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from subprocess import CalledProcessError, run
-from typing import Callable
+from typing import Any, Callable
 
 import click
 
@@ -17,11 +19,13 @@ class ProcessedImage:
     A class to hold data about rpms for single image:
     Image name,
     Unsigned RPMs,
+    Keys used to sign RPMs,
     Errors
     """
 
     image: str
     unsigned_rpms: list[str]
+    signed_rpms_keys: list[str]
     error: str = ""
 
     def __str__(self) -> str:
@@ -87,8 +91,19 @@ def get_unsigned_rpms(rpms: list[str]) -> list[str]:
         for rpm in rpms
         if "Key ID" not in rpm and not rpm.startswith("gpg-pubkey")
     ]
-
     return unsigned_rpms
+
+
+def get_signed_rpms_keys(rpms: list[str]) -> list[str]:
+    """
+    Get the keys used to sign RPMs
+    :param rpms: list of RPMs
+    :return: list of keys used to sign RPMs
+    """
+    signed_rpms_keys: list[str] = [
+        rpm.split(", Key ID ")[-1] for rpm in rpms if "Key ID" in rpm
+    ]
+    return signed_rpms_keys
 
 
 def generate_output(processed_image: ProcessedImage) -> tuple[bool, str]:
@@ -112,16 +127,34 @@ def generate_output(processed_image: ProcessedImage) -> tuple[bool, str]:
     return failure, output.lstrip()
 
 
+def generate_results(
+    processed_image: ProcessedImage,
+) -> dict[str, Any]:
+    """
+    Generate the results that should be added to the results of the task
+    :param processed_image: ProcessedImage that contains all the rpms information
+    :returns: dictionary with results for the image
+    """
+    results: dict[str, Any] = {}
+    if processed_image.error != "":
+        results["error"] = processed_image.error
+    else:
+        results["keys"] = dict(Counter(processed_image.signed_rpms_keys).most_common())
+        results["keys"]["unsigned"] = len(processed_image.unsigned_rpms)
+    return results
+
+
 @dataclass(frozen=True)
 class ImageProcessor:
     """
-    Populate RPMs data for all images
+    Populate RPMs data for an image
     """
 
     workdir: Path
     db_getter: Callable[[str, Path], Path] = get_rpmdb
     rpms_getter: Callable[[Path], list[str]] = get_rpms_data
     unsigned_rpms_getter: Callable[[list[str]], list[str]] = get_unsigned_rpms
+    signed_rpms_keys_getter: Callable[[list[str]], list[str]] = get_signed_rpms_keys
 
     def __call__(self, img: str) -> ProcessedImage:
         with tempfile.TemporaryDirectory(
@@ -131,15 +164,18 @@ class ImageProcessor:
                 rpms_db = self.db_getter(img, Path(tmpdir))
                 rpms_data = self.rpms_getter(rpms_db)
                 unsigned_rpms = self.unsigned_rpms_getter(rpms_data)
+                signed_rpms_keys = self.signed_rpms_keys_getter(rpms_data)
             except CalledProcessError as err:
                 return ProcessedImage(
                     image=img,
                     unsigned_rpms=[],
+                    signed_rpms_keys=[],
                     error=err.stderr,
                 )
             return ProcessedImage(
                 image=img,
                 unsigned_rpms=unsigned_rpms,
+                signed_rpms_keys=signed_rpms_keys,
             )
 
 
@@ -170,17 +206,22 @@ def main(
 ) -> None:
     """Verify RPMs are signed"""
     status_path: Path = workdir / "status"
+    results_path: Path = workdir / "results"
+
     processor = ImageProcessor(workdir=workdir)
     processed_image = processor(img=img_input)
 
     failures_occurred, output = generate_output(processed_image=processed_image)
+    results = generate_results(processed_image=processed_image)
+    results_path.write_text(json.dumps(results))
     if failures_occurred:
         status_path.write_text("ERROR")
     else:
         status_path.write_text("SUCCESS")
     if failures_occurred and fail_unsigned:
-        sys.exit(output)
+        sys.exit(output + "\n" + json.dumps(results))
     print(output)
+    print(json.dumps(results))
 
 
 if __name__ == "__main__":
