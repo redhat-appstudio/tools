@@ -1,9 +1,10 @@
 """Test rpm_verifier.py end-to-end"""
 
+import json
 from pathlib import Path
 from subprocess import CalledProcessError, run
 from textwrap import dedent
-from typing import Callable
+from typing import Any, Callable
 from unittest.mock import MagicMock, create_autospec
 
 import pytest
@@ -14,8 +15,10 @@ from verify_rpms.rpm_verifier import (
     ImageProcessor,
     ProcessedImage,
     generate_output,
+    generate_results,
     get_rpmdb,
     get_rpms_data,
+    get_signed_rpms_keys,
     get_unsigned_rpms,
 )
 
@@ -126,12 +129,42 @@ def test_get_unsigned_rpms(test_input: list[str], expected: list[str]) -> None:
 
 
 @pytest.mark.parametrize(
+    ("test_input", "expected"),
+    [
+        pytest.param(
+            [
+                "libssh-config-0.9.6-10.el8_8 RSA/SHA256, Tue 6 May , Key ID 1234567890",
+                "python39-twisted-23.10.0-1.el8ap (none)",
+                "libmodulemd-2.13.0-1.el8 RSA/SHA256, Wed 18 Aug , Key ID 1234567890",
+                "gpg-pubkey-d4082792-5b32db75 (none)",
+                "libtest1-2.13.0-1.el8 RSA/SHA256, Wed 18 Aug , Key ID 0987654321",
+            ],
+            ["1234567890", "1234567890", "0987654321"],
+            id="Mix of signed and unsigned",
+        ),
+        pytest.param(
+            [
+                "python39-twisted-23.10.0-1.el8ap (none)",
+                "gpg-pubkey-d4082792-5b32db75 (none)",
+            ],
+            [],
+            id="All unsigned",
+        ),
+        pytest.param([], [], id="Empty list"),
+    ],
+)
+def test_get_signed_rpms_keys(test_input: list[str], expected: list[str]) -> None:
+    """Test get_signed_rpms_keys"""
+    result = get_signed_rpms_keys(rpms=test_input)
+    assert result == expected
+
+
+@pytest.mark.parametrize(
     ("processed_image", "expected_print", "expected_failures_exist"),
     [
         pytest.param(
             ProcessedImage(
-                image="i1",
-                unsigned_rpms=[],
+                image="i1", unsigned_rpms=[], signed_rpms_keys=["1234", "1234", "5678"]
             ),
             "No unsigned RPMs in i1",
             False,
@@ -141,6 +174,7 @@ def test_get_unsigned_rpms(test_input: list[str], expected: list[str]) -> None:
             ProcessedImage(
                 image="i1",
                 unsigned_rpms=["my-rpm"],
+                signed_rpms_keys=["1234", "1234", "5678"],
             ),
             dedent(
                 """
@@ -155,6 +189,7 @@ def test_get_unsigned_rpms(test_input: list[str], expected: list[str]) -> None:
             ProcessedImage(
                 image="i1",
                 unsigned_rpms=["my-rpm", "another-rpm"],
+                signed_rpms_keys=[],
             ),
             dedent(
                 """
@@ -169,6 +204,7 @@ def test_get_unsigned_rpms(test_input: list[str], expected: list[str]) -> None:
             ProcessedImage(
                 image="i1",
                 unsigned_rpms=[],
+                signed_rpms_keys=[],
                 error="Failed to run command",
             ),
             dedent(
@@ -193,6 +229,44 @@ def test_generate_output(
     assert print_out == expected_print
 
 
+@pytest.mark.parametrize(
+    ("processed_image", "expected_results"),
+    [
+        pytest.param(
+            ProcessedImage(
+                image="i1", unsigned_rpms=[], signed_rpms_keys=["1234", "1234", "5678"]
+            ),
+            {"keys": {"1234": 2, "5678": 1, "unsigned": 0}},
+            id="No unsigned RPMs + no errors",
+        ),
+        pytest.param(
+            ProcessedImage(
+                image="i1", unsigned_rpms=["my-rpm", "another-rpm"], signed_rpms_keys=[]
+            ),
+            {"keys": {"unsigned": 2}},
+            id="An image with multiple unsigned RPMs",
+        ),
+        pytest.param(
+            ProcessedImage(
+                image="i1",
+                unsigned_rpms=[],
+                error="Failed to run command",
+                signed_rpms_keys=[],
+            ),
+            {"error": "Failed to run command"},
+            id="Error when running command, return error",
+        ),
+    ],
+)
+def test_generate_results(
+    processed_image: ProcessedImage,
+    expected_results: dict[str, Any],
+) -> None:
+    """Test generate_results"""
+    results = generate_results(processed_image)
+    assert results == expected_results
+
+
 class TestImageProcessor:
     """Test ImageProcessor's callable"""
 
@@ -211,10 +285,15 @@ class TestImageProcessor:
         """mocked unsigned_rpms_getter function"""
         return MagicMock()
 
+    @pytest.fixture()
+    def mock_signed_rpms_keys_getter(self) -> MagicMock:
+        """mocked signed_rpms_keys_getter function"""
+        return MagicMock()
+
     @pytest.mark.parametrize(
-        ("rpms_data", "expected_unsigned"),
+        ("rpms_data", "expected_unsigned", "expected_signed_keys"),
         [
-            pytest.param([], [], id="No RPMs"),
+            pytest.param([], [], [], id="No RPMs"),
             pytest.param(
                 [
                     "libssh-config-0.9.6-10.el8_8 RSA/SHA256, Tue 6 May , Key ID 1234567890",
@@ -223,6 +302,7 @@ class TestImageProcessor:
                     "gpg-pubkey-d4082792-5b32db75 (none)",
                 ],
                 ["python39-twisted-23.10.0-1.el8ap"],
+                ["1234567890", "1234567890"],
                 id="one unsigned, two signed",
             ),
         ],
@@ -231,6 +311,7 @@ class TestImageProcessor:
         self,
         mock_db_getter: MagicMock,
         expected_unsigned: list[str],
+        expected_signed_keys: list[str],
         mock_rpms_getter: MagicMock,
         tmp_path: Path,
         rpms_data: list[str],
@@ -247,6 +328,7 @@ class TestImageProcessor:
         assert out == ProcessedImage(
             image=img,
             unsigned_rpms=expected_unsigned,
+            signed_rpms_keys=expected_signed_keys,
             error="",
         )
 
@@ -255,6 +337,7 @@ class TestImageProcessor:
         mock_db_getter: MagicMock,
         mock_rpms_getter: MagicMock,
         mock_unsigned_rpms_getter: MagicMock,
+        mock_signed_rpms_keys_getter: MagicMock,
         tmp_path: Path,
     ) -> None:
         """Test ImageProcessor exception in db_getter"""
@@ -267,19 +350,24 @@ class TestImageProcessor:
             db_getter=mock_db_getter,
             rpms_getter=mock_rpms_getter,
             unsigned_rpms_getter=mock_unsigned_rpms_getter,
+            signed_rpms_keys_getter=mock_signed_rpms_keys_getter,
         )
         img = "my-img"
         out = instance(img)
         mock_db_getter.assert_called_once()
         mock_rpms_getter.assert_not_called()
         mock_unsigned_rpms_getter.assert_not_called()
-        assert out == ProcessedImage(image=img, unsigned_rpms=[], error=stderr)
+        mock_signed_rpms_keys_getter.assert_not_called()
+        assert out == ProcessedImage(
+            image=img, unsigned_rpms=[], signed_rpms_keys=[], error=stderr
+        )
 
     def test_call_rpm_getter_exception(  # pylint: disable=too-many-arguments
         self,
         mock_db_getter: MagicMock,
         mock_rpms_getter: MagicMock,
         mock_unsigned_rpms_getter: MagicMock,
+        mock_signed_rpms_keys_getter: MagicMock,
         tmp_path: Path,
     ) -> None:
         """Test ImageProcessor exception in rpms_getter"""
@@ -292,19 +380,24 @@ class TestImageProcessor:
             db_getter=mock_db_getter,
             rpms_getter=mock_rpms_getter,
             unsigned_rpms_getter=mock_unsigned_rpms_getter,
+            signed_rpms_keys_getter=mock_signed_rpms_keys_getter,
         )
         img = "my-img"
         out = instance(img)
         mock_db_getter.assert_called_once()
         mock_rpms_getter.assert_called_once()
         mock_unsigned_rpms_getter.assert_not_called()
-        assert out == ProcessedImage(image=img, unsigned_rpms=[], error=stderr)
+        mock_signed_rpms_keys_getter.assert_not_called()
+        assert out == ProcessedImage(
+            image=img, unsigned_rpms=[], signed_rpms_keys=[], error=stderr
+        )
 
     def test_call_unsigned_rpms_getter_exception(  # pylint: disable=too-many-arguments
         self,
         mock_db_getter: MagicMock,
         mock_rpms_getter: MagicMock,
         mock_unsigned_rpms_getter: MagicMock,
+        mock_signed_rpms_keys_getter: MagicMock,
         tmp_path: Path,
     ) -> None:
         """Test ImageProcessor exception in unsigned_rpms_getter"""
@@ -317,13 +410,17 @@ class TestImageProcessor:
             db_getter=mock_db_getter,
             rpms_getter=mock_rpms_getter,
             unsigned_rpms_getter=mock_unsigned_rpms_getter,
+            signed_rpms_keys_getter=mock_signed_rpms_keys_getter,
         )
         img = "my-img"
         out = instance(img)
         mock_db_getter.assert_called_once()
         mock_rpms_getter.assert_called_once()
         mock_unsigned_rpms_getter.assert_called_once()
-        assert out == ProcessedImage(image=img, unsigned_rpms=[], error=stderr)
+        mock_signed_rpms_keys_getter.assert_not_called()
+        assert out == ProcessedImage(
+            image=img, unsigned_rpms=[], signed_rpms_keys=[], error=stderr
+        )
 
 
 class TestMain:
@@ -356,6 +453,14 @@ class TestMain:
 
         return _mock_generate_output
 
+    @pytest.fixture()
+    def generate_results_mock(self, monkeypatch: MonkeyPatch) -> MagicMock:
+        """Monkey-patched generate_results"""
+
+        mock = create_autospec(generate_results, return_value={"results": "res"})
+        monkeypatch.setattr(rpm_verifier, generate_results.__name__, mock)
+        return mock
+
     @pytest.mark.parametrize(
         ("fail_unsigned", "has_errors"),
         [
@@ -379,9 +484,11 @@ class TestMain:
         fail_unsigned: bool,
         has_errors: bool,
         tmp_path: Path,
+        generate_results_mock: MagicMock,
     ) -> None:
         """Test call to rpm_verifier.py main function"""
         status_path = tmp_path / "status"
+        results_path = tmp_path / "results"
         generate_output_mock = create_generate_output_mock(with_failures=has_errors)
         rpm_verifier.main(  # pylint: disable=no-value-for-parameter
             args=[
@@ -399,24 +506,32 @@ class TestMain:
             assert status_path.read_text() == "ERROR"
         else:
             assert status_path.read_text() == "SUCCESS"
-        assert mock_image_processor.return_value.call_count == 1
+        mock_image_processor.return_value.assert_called_once_with(img="img1")
         generate_output_mock.assert_called_once_with(
             processed_image=mock_image_processor.return_value.return_value
         )
-        mock_image_processor.return_value.assert_called_once_with(img="img1")
+        generate_results_mock.assert_called_once_with(
+            processed_image=mock_image_processor.return_value.return_value
+        )
+        assert results_path.read_text() == json.dumps(
+            generate_results_mock.return_value
+        )
 
     def test_main_fail_on_unsigned_rpm_or_errors(
         self,
         create_generate_output_mock: MagicMock,
         mock_image_processor: MagicMock,  # pylint: disable=unused-argument
         tmp_path: Path,
+        generate_results_mock: MagicMock,
     ) -> None:
         """Test call to rpm_verifier.py main function fails
         when whe 'fail-unsigned' flag is used and there are unsigned RPMs
         """
         status_path = tmp_path / "status"
+        results_path = tmp_path / "results"
         fail_unsigned: bool = True
         generate_output_mock = create_generate_output_mock(with_failures=True)
+
         with pytest.raises(SystemExit) as err:
             rpm_verifier.main(  # pylint: disable=no-value-for-parameter
                 args=[
@@ -431,5 +546,17 @@ class TestMain:
                 standalone_mode=False,
             )
         assert status_path.read_text() == "ERROR"
-        generate_output_mock.assert_called_once()
-        assert err.value.code == generate_output_mock.return_value[1]
+        assert results_path.read_text() == json.dumps(
+            generate_results_mock.return_value
+        )
+        mock_image_processor.return_value.assert_called_once_with(img="img1")
+        generate_output_mock.assert_called_once_with(
+            processed_image=mock_image_processor.return_value.return_value
+        )
+        generate_results_mock.assert_called_once_with(
+            processed_image=mock_image_processor.return_value.return_value
+        )
+        assert (
+            err.value.code == f"{generate_output_mock.return_value[1]}"
+            f"\n{json.dumps(generate_results_mock.return_value)}"
+        )
