@@ -137,6 +137,7 @@ def inspect_image_ref(
     :param runner: subprocess.run to run CLI commands
     :return: dictionary containing the inspection details
     """
+
     image_with_digest = f"docker://{':'.join(image_url.split(':')[:-1])}@{image_digest}"
     inspect = runner(
         [  # pylint: disable=duplicate-code
@@ -189,9 +190,7 @@ def get_images_from_inspection(
             for man in manifests
         ]
         return image_list
-
     return [f"{':'.join(image_url.split(':')[:-1])}@{image_digest}"]
-
 
 def set_output_and_status(
     processed_image_list: list[ProcessedImage],

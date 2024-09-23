@@ -314,6 +314,7 @@ def test_generate_image_output(
                     },
                 ],
             },
+
             "quay.io/image:5000/test:tag",
             "sha256:1234567890",
             ["quay.io/image:5000/test@sha256:1234567890"],
