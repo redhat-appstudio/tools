@@ -5,10 +5,11 @@ import json
 import sys
 import tempfile
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from subprocess import CalledProcessError, run
-from typing import Any, Callable
+from typing import Any, Callable, Iterable, Tuple
 
 import click
 
@@ -21,15 +22,16 @@ class ProcessedImage:
     Unsigned RPMs,
     Keys used to sign RPMs,
     Errors
+    Output
+    Results
     """
 
     image: str
     unsigned_rpms: list[str]
     signed_rpms_keys: list[str]
+    results: dict[str, Any]
     error: str = ""
-
-    def __str__(self) -> str:
-        return f"{self.image}: {', '.join(self.unsigned_rpms)}"
+    output: str = ""
 
 
 def get_rpmdb(container_image: str, target_dir: Path, runner: Callable = run) -> Path:
@@ -106,42 +108,108 @@ def get_signed_rpms_keys(rpms: list[str]) -> list[str]:
     return signed_rpms_keys
 
 
-def generate_output(processed_image: ProcessedImage) -> tuple[bool, str]:
-    """
-    Generate the output that should be printed to the user based on the processed images
-    results.
-    :param processed_image: ProcessedImage that contains all the rpms information
-    :returns: The status and summary of the image processing.
-    """
-    failure = True
-
-    if not processed_image.unsigned_rpms and not processed_image.error:
-        output = f"No unsigned RPMs in {processed_image.image}"
-        failure = False
-    else:
-        output = (
-            f"Found unsigned RPMs in {processed_image.image}:\n{processed_image.unsigned_rpms}"
-            if processed_image.unsigned_rpms
-            else f"Encountered errors in {processed_image.image}:\n{processed_image.error}"
-        )
-    return failure, output.lstrip()
-
-
-def generate_results(
-    processed_image: ProcessedImage,
+def generate_image_results(
+    error: str, signed_rpms_keys: list[str], unsigned_rpms: list[str]
 ) -> dict[str, Any]:
     """
-    Generate the results that should be added to the results of the task
-    :param processed_image: ProcessedImage that contains all the rpms information
+    Generate the results dictionary for an image
+    :param error: error message
+    :param signed_rpms_keys: a list of signed rpms keys
+    :param unsigned_rpms: a list of unsigned rpms
     :returns: dictionary with results for the image
     """
     results: dict[str, Any] = {}
-    if processed_image.error != "":
-        results["error"] = processed_image.error
+    if error != "":
+        results["error"] = error
     else:
-        results["keys"] = dict(Counter(processed_image.signed_rpms_keys).most_common())
-        results["keys"]["unsigned"] = len(processed_image.unsigned_rpms)
+        results["keys"] = dict(Counter(signed_rpms_keys).most_common())
+        results["keys"]["unsigned"] = len(unsigned_rpms)
     return results
+
+
+def inspect_image_ref(
+    image_url: str, image_digest: str, runner: Callable = run
+) -> dict[str, Any]:
+    """
+    Inspect the image reference by running Skopeo
+    :param image_url: image url to inspect
+    :param image_digest: image digest to inspect
+    :param runner: subprocess.run to run CLI commands
+    :return: dictionary containing the inspection details
+    """
+    image_with_digest = f"docker://{':'.join(image_url.split(':')[:-1])}@{image_digest}"
+    inspect = runner(
+        [  # pylint: disable=duplicate-code
+            "skopeo",
+            "inspect",
+            "--raw",
+            image_with_digest,
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return json.loads(inspect.stdout)
+
+
+def generate_image_output(image: str, unsigned_rpms: list[str], error: str) -> str:
+    """
+    Generates output for each container according to the scan
+    :param image: image name
+    :param unsigned_rpms: list of unsigned RPMs
+    :param error: error string
+    :return: output string
+    """
+    header = f"Image: {image}\n"
+    if error != "":
+        output = f"{header}Error occurred:\n{error}\n"
+    elif unsigned_rpms:
+        output = f"{header}Found unsigned RPMs:\n{unsigned_rpms}\n"
+    else:
+        output = f"{header}No unsigned RPMs found\n"
+    return output
+
+
+def get_images_from_inspection(
+    inspect_results: dict[str, Any], image_url: str, image_digest: str
+) -> list[str]:
+    """
+    Analyze the inspection results and return all the images for the image reference
+    The image reference may refer to an image index (AKA Manifest list)
+    In this case, extract all the digests from the manifests and return the list of image references
+    :param inspect_results: inspection results dictionary
+    :param image_url: image url to inspect
+    :param image_digest: image digest to inspect
+    :return: list of images to scan
+    """
+    if "manifests" in inspect_results:
+        manifests = inspect_results["manifests"]
+        image_list = [
+            f"{':'.join(image_url.split(':')[:-1])}@" + man["digest"]
+            for man in manifests
+        ]
+        return image_list
+
+    return [f"{':'.join(image_url.split(':')[:-1])}@{image_digest}"]
+
+
+def set_output_and_status(
+    processed_image_list: list[ProcessedImage],
+) -> Tuple[str, bool]:
+    """
+    Set output and status for the all task
+    Create an output combined of all the image outputs
+    If one of the scans was failed (has an error) - the failures_occurred should be true
+    :param processed_image_list: list of processed images
+    :return: output as a string, failures_occurred as a boolean
+    """
+    output = ""
+    failures_occurred = False
+    for img in processed_image_list:
+        output += f"{img.output}\n{img.results}\n====================================\n"
+        if img.error != "" or img.unsigned_rpms:
+            failures_occurred = True
+    return output, failures_occurred
 
 
 @dataclass(frozen=True)
@@ -155,6 +223,10 @@ class ImageProcessor:
     rpms_getter: Callable[[Path], list[str]] = get_rpms_data
     unsigned_rpms_getter: Callable[[list[str]], list[str]] = get_unsigned_rpms
     signed_rpms_keys_getter: Callable[[list[str]], list[str]] = get_signed_rpms_keys
+    generate_image_output: Callable[[str, list[str], str], str] = generate_image_output
+    generate_image_results: Callable[[str, list[str], list[str]], dict[str, Any]] = (
+        generate_image_results
+    )
 
     def __call__(self, img: str) -> ProcessedImage:
         with tempfile.TemporaryDirectory(
@@ -165,25 +237,43 @@ class ImageProcessor:
                 rpms_data = self.rpms_getter(rpms_db)
                 unsigned_rpms = self.unsigned_rpms_getter(rpms_data)
                 signed_rpms_keys = self.signed_rpms_keys_getter(rpms_data)
+
             except CalledProcessError as err:
                 return ProcessedImage(
                     image=img,
                     unsigned_rpms=[],
                     signed_rpms_keys=[],
                     error=err.stderr,
+                    output=self.generate_image_output(
+                        img,
+                        [],
+                        err.stderr,
+                    ),
+                    results=self.generate_image_results(err.stderr, [], []),
                 )
             return ProcessedImage(
                 image=img,
                 unsigned_rpms=unsigned_rpms,
                 signed_rpms_keys=signed_rpms_keys,
+                output=self.generate_image_output(img, unsigned_rpms, ""),
+                results=self.generate_image_results(
+                    "",
+                    signed_rpms_keys,
+                    unsigned_rpms,
+                ),
             )
 
 
 @click.command()
 @click.option(
-    "--input",
-    "img_input",
+    "--image-url",
     help="Reference to container image",
+    type=str,
+    required=True,
+)
+@click.option(
+    "--image-digest",
+    help="Image digest",
     type=str,
     required=True,
 )
@@ -200,28 +290,41 @@ class ImageProcessor:
     required=True,
 )
 def main(
-    img_input: str,
+    image_url: str,
+    image_digest: str,
     fail_unsigned: bool,
     workdir: Path,
 ) -> None:
     """Verify RPMs are signed"""
     status_path: Path = workdir / "status"
-    results_path: Path = workdir / "results"
+
+    # Exit in case of failure to process the image reference
+    try:
+        process = inspect_image_ref(image_url=image_url, image_digest=image_digest)
+        images = get_images_from_inspection(
+            inspect_results=process, image_url=image_url, image_digest=image_digest
+        )
+    except CalledProcessError as err:
+        print(f"failed to process image\n{err.stderr}")
+        status_path.write_text("ERROR")
+        if fail_unsigned:
+            sys.exit(f"failed to process image\n{err.stderr}")
+        else:
+            sys.exit(0)
 
     processor = ImageProcessor(workdir=workdir)
-    processed_image = processor(img=img_input)
+    with ThreadPoolExecutor() as executor:
+        processed_images: Iterable[ProcessedImage] = executor.map(processor, images)
 
-    failures_occurred, output = generate_output(processed_image=processed_image)
-    results = generate_results(processed_image=processed_image)
-    results_path.write_text(json.dumps(results))
+    output, failures_occurred = set_output_and_status(list(processed_images))
+
     if failures_occurred:
         status_path.write_text("ERROR")
     else:
         status_path.write_text("SUCCESS")
     if failures_occurred and fail_unsigned:
-        sys.exit(output + "\n" + json.dumps(results))
+        sys.exit(output)
     print(output)
-    print(json.dumps(results))
 
 
 if __name__ == "__main__":
