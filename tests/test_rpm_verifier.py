@@ -307,7 +307,7 @@ class TestImageProcessor:
             ),
         ],
     )
-    def test_call(  # pylint: disable=too-many-arguments
+    def test_call(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
         mock_db_getter: MagicMock,
         expected_unsigned: list[str],
@@ -332,7 +332,8 @@ class TestImageProcessor:
             error="",
         )
 
-    def test_call_db_getter_exception(  # pylint: disable=too-many-arguments
+    def test_call_db_getter_exception(
+        # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
         mock_db_getter: MagicMock,
         mock_rpms_getter: MagicMock,
@@ -362,7 +363,8 @@ class TestImageProcessor:
             image=img, unsigned_rpms=[], signed_rpms_keys=[], error=stderr
         )
 
-    def test_call_rpm_getter_exception(  # pylint: disable=too-many-arguments
+    def test_call_rpm_getter_exception(
+        # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
         mock_db_getter: MagicMock,
         mock_rpms_getter: MagicMock,
@@ -392,7 +394,8 @@ class TestImageProcessor:
             image=img, unsigned_rpms=[], signed_rpms_keys=[], error=stderr
         )
 
-    def test_call_unsigned_rpms_getter_exception(  # pylint: disable=too-many-arguments
+    def test_call_unsigned_rpms_getter_exception(
+        # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
         mock_db_getter: MagicMock,
         mock_rpms_getter: MagicMock,
@@ -477,7 +480,7 @@ class TestMain:
             ),
         ],
     )
-    def test_main(  # pylint: disable=too-many-arguments
+    def test_main(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
         create_generate_output_mock: MagicMock,
         mock_image_processor: MagicMock,

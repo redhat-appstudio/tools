@@ -68,7 +68,7 @@ class TestODCSComposeGenerator:
         monkeypatch.setattr(odcs_compose_generator, ODCSFetcher.__name__, mock)
         return mock
 
-    def test_main(  # pylint: disable=too-many-arguments
+    def test_main(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
         compose_dir_path: Path,
         input_data: dict,
