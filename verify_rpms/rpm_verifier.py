@@ -137,7 +137,6 @@ def inspect_image_ref(
     :param runner: subprocess.run to run CLI commands
     :return: dictionary containing the inspection details
     """
-
     image_with_digest = f"docker://{':'.join(image_url.split(':')[:-1])}@{image_digest}"
     inspect = runner(
         [  # pylint: disable=duplicate-code
@@ -192,6 +191,7 @@ def get_images_from_inspection(
         return image_list
     return [f"{':'.join(image_url.split(':')[:-1])}@{image_digest}"]
 
+
 def set_output_and_status(
     processed_image_list: list[ProcessedImage],
 ) -> Tuple[str, bool]:
@@ -209,6 +209,28 @@ def set_output_and_status(
         if img.error != "" or img.unsigned_rpms:
             failures_occurred = True
     return output, failures_occurred
+
+
+def aggregate_results(processed_image_list: list[ProcessedImage]) -> dict[str, Any]:
+    """
+    Aggregate results from all images
+    :param processed_image_list: list of ProcessedImages
+    :return: dictionary with the aggregated results
+    """
+    aggregated_rpms_keys: list[str] = []
+    aggregated_unsigned_rpms: list[str] = []
+    aggregated_results: dict[str, Any] = {}
+
+    for image in processed_image_list:
+        if image.error != "":
+            aggregated_results["error"] = image.error
+            return aggregated_results
+        aggregated_rpms_keys += image.signed_rpms_keys
+        aggregated_unsigned_rpms += image.unsigned_rpms
+
+    aggregated_results["keys"] = dict(Counter(aggregated_rpms_keys).most_common())
+    aggregated_results["keys"]["unsigned"] = len(aggregated_unsigned_rpms)
+    return aggregated_results
 
 
 @dataclass(frozen=True)
@@ -288,7 +310,7 @@ class ImageProcessor:
     type=click.Path(path_type=Path),
     required=True,
 )
-def main(
+def main(  # pylint: disable=too-many-locals
     image_url: str,
     image_digest: str,
     fail_unsigned: bool,
@@ -296,6 +318,7 @@ def main(
 ) -> None:
     """Verify RPMs are signed"""
     status_path: Path = workdir / "status"
+    results_path: Path = workdir / "results"
 
     # Exit in case of failure to process the image reference
     try:
@@ -304,26 +327,34 @@ def main(
             inspect_results=process, image_url=image_url, image_digest=image_digest
         )
     except CalledProcessError as err:
-        print(f"failed to process image\n{err.stderr}")
+        out = generate_image_output(image=image_url, unsigned_rpms=[], error=err.stderr)
+        result: dict[str, str] = {"error": err.stderr}
+
         status_path.write_text("ERROR")
+        results_path.write_text(json.dumps(result))
+
         if fail_unsigned:
-            sys.exit(f"failed to process image\n{err.stderr}")
+            sys.exit(f"{out}\n{json.dumps(result)}")
         else:
+            print(f"{out}\n{json.dumps(result)}")
             sys.exit(0)
 
     processor = ImageProcessor(workdir=workdir)
     with ThreadPoolExecutor() as executor:
         processed_images: Iterable[ProcessedImage] = executor.map(processor, images)
-
-    output, failures_occurred = set_output_and_status(list(processed_images))
-
+    processed_images_list = list(processed_images)
+    output, failures_occurred = set_output_and_status(
+        processed_image_list=processed_images_list
+    )
+    aggregated_results = aggregate_results(processed_image_list=processed_images_list)
+    results_path.write_text(json.dumps(aggregated_results))
     if failures_occurred:
         status_path.write_text("ERROR")
     else:
         status_path.write_text("SUCCESS")
     if failures_occurred and fail_unsigned:
-        sys.exit(output)
-    print(output)
+        sys.exit(f"{output}\nFinal results:\n{json.dumps(aggregated_results)}")
+    print(f"{output}\nFinal results:\n{json.dumps(aggregated_results)}")
 
 
 if __name__ == "__main__":

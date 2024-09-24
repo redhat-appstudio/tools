@@ -20,11 +20,7 @@ RUN /usr/bin/fix-permissions /tmp/src \
     && /usr/bin/update-ca-trust
 RUN yum install -y krb5-workstation skopeo
 COPY data/kerberos/krb5.conf /etc
-<<<<<<< HEAD
 
-=======
-RUN yum install -y skopeo
->>>>>>> 8423e25 (chore(RHTAPWATCH-1304): add support for image index)
 USER 1001
 
 RUN \
