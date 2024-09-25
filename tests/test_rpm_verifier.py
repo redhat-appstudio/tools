@@ -19,6 +19,7 @@ from verify_rpms.rpm_verifier import (
     aggregate_results,
     generate_image_output,
     generate_image_results,
+    generate_processed_image_digests,
     get_images_from_inspection,
     get_rpmdb,
     get_rpms_data,
@@ -597,6 +598,92 @@ def test_aggregate_results(
     assert result == expected_output
 
 
+@pytest.mark.parametrize(
+    ("processed_images_list", "image_url", "image_digest", "expected_output"),
+    [
+        pytest.param(
+            [
+                ProcessedImage(
+                    image="image1@sha256:1234567890",
+                    signed_rpms_keys=["123", "456"],
+                    unsigned_rpms=[],
+                    error="",
+                    output="image1 output",
+                    results={},
+                ),
+            ],
+            "image1:tag",
+            "sha256:1234567890",
+            {
+                "image": {
+                    "pullspec": "image1:tag",
+                    "digests": [
+                        "sha256:1234567890",
+                    ],
+                }
+            },
+            id="image reference is not an image digest (has only one image)",
+        ),
+        pytest.param(
+            [
+                ProcessedImage(
+                    image="image1@sha256:0987654321",
+                    signed_rpms_keys=["123", "456"],
+                    unsigned_rpms=[],
+                    error="",
+                    output="image1 output",
+                    results={},
+                ),
+                ProcessedImage(
+                    image="image1@sha256:1122334455",
+                    signed_rpms_keys=["123", "456"],
+                    unsigned_rpms=[],
+                    error="",
+                    output="image1 output",
+                    results={},
+                ),
+                ProcessedImage(
+                    image="image1@sha256:5544332211",
+                    signed_rpms_keys=["123", "456"],
+                    unsigned_rpms=[],
+                    error="",
+                    output="image1 output",
+                    results={},
+                ),
+            ],
+            "image1:tag",
+            "sha256:1234567890",
+            {
+                "image": {
+                    "pullspec": "image1:tag",
+                    "digests": [
+                        "sha256:1234567890",
+                        "sha256:0987654321",
+                        "sha256:1122334455",
+                        "sha256:5544332211",
+                    ],
+                }
+            },
+            id="image reference is of image digest kind (has few images in manifest)",
+        ),
+    ],
+)
+def test_generate_images_processed_result(
+    processed_images_list: list[ProcessedImage],
+    image_url: str,
+    image_digest: str,
+    expected_output: dict[str, Any],
+) -> None:
+    """test generate_images_processed_result"""
+    result: dict[str, Any] = generate_processed_image_digests(
+        processed_images=processed_images_list,
+        image_url=image_url,
+        image_digest=image_digest,
+    )
+    # use set to ignore the order inside the list
+    assert set(result["image"]["digests"]) == set(expected_output["image"]["digests"])
+
+
 class TestImageProcessor:
     """Test ImageProcessor's callable"""
 
@@ -886,6 +973,19 @@ class TestMain:
         return mock
 
     @pytest.fixture()
+    def mock_generate_images_processed_result(
+        self, monkeypatch: MonkeyPatch
+    ) -> MagicMock:
+        """Mock generate_images_processed_result"""
+        mock: MagicMock = create_autospec(
+            generate_processed_image_digests, return_value={"image": "image_processed"}
+        )
+        monkeypatch.setattr(
+            rpm_verifier, generate_processed_image_digests.__name__, mock
+        )
+        return mock
+
+    @pytest.fixture()
     def mock_inspect_image_ref(self, monkeypatch: MonkeyPatch) -> MagicMock:
         """Mock inspect_image_ref"""
         mock: MagicMock = create_autospec(
@@ -979,6 +1079,7 @@ class TestMain:
         mock_get_images_from_inspection: MagicMock,
         create_set_output_and_status_mock: MagicMock,
         mock_aggregate_results: MagicMock,
+        mock_generate_images_processed_result: MagicMock,
         fail_unsigned: bool,
         has_errors: bool,
         tmp_path: Path,
@@ -986,6 +1087,8 @@ class TestMain:
         """Test call to rpm_verifier.py main function"""
         status_path = tmp_path / "status"
         results_path = tmp_path / "results"
+        images_processed_path: Path = tmp_path / "images_processed"
+
         set_output_and_status_mock = create_set_output_and_status_mock(
             with_failures=has_errors
         )
@@ -1010,11 +1113,15 @@ class TestMain:
         assert results_path.read_text() == json.dumps(
             mock_aggregate_results.return_value
         )
+        assert images_processed_path.read_text() == json.dumps(
+            mock_generate_images_processed_result.return_value
+        )
         mock_inspect_image_ref.assert_called_once()
         mock_get_images_from_inspection.assert_called_once()
         mock_image_processor.assert_called_once_with(tmp_path)
         set_output_and_status_mock.assert_called_once()
         mock_aggregate_results.assert_called_once()
+        mock_generate_images_processed_result.assert_called_once()
 
     def test_main_fail_on_unsigned_rpm_or_errors(  # pylint: disable=too-many-arguments
         self,
@@ -1023,6 +1130,7 @@ class TestMain:
         mock_inspect_image_ref: MagicMock,
         mock_get_images_from_inspection: MagicMock,
         mock_aggregate_results: MagicMock,
+        mock_generate_images_processed_result: MagicMock,
         tmp_path: Path,
     ) -> None:
         """Test call to rpm_verifier.py main function fails
@@ -1030,6 +1138,8 @@ class TestMain:
         """
         status_path = tmp_path / "status"
         results_path = tmp_path / "results"
+        images_processed_path: Path = tmp_path / "images_processed"
+
         fail_unsigned: bool = True
         set_output_and_status_mock = create_set_output_and_status_mock(
             with_failures=True
@@ -1054,12 +1164,18 @@ class TestMain:
         assert results_path.read_text() == json.dumps(
             mock_aggregate_results.return_value
         )
+        assert images_processed_path.read_text() == json.dumps(
+            mock_generate_images_processed_result.return_value
+        )
         mock_image_processor.assert_called_once_with(tmp_path)
         set_output_and_status_mock.assert_called_once()
 
         assert (
             err.value.code == f"{set_output_and_status_mock.return_value[0]}\n"
-            f"Final results:\n{json.dumps(mock_aggregate_results.return_value)}"
+            f"Final results:\n"
+            f"{json.dumps(mock_aggregate_results.return_value)}\n"
+            f"Images processed:\n"
+            f"{json.dumps(mock_generate_images_processed_result.return_value)}"
         )
 
     def test_main_inspect_image_ref_exception(  # pylint: disable=too-many-arguments
@@ -1070,11 +1186,13 @@ class TestMain:
         create_set_output_and_status_mock: MagicMock,
         mock_generate_image_output: MagicMock,
         mock_aggregate_results: MagicMock,
+        mock_generate_images_processed_result: MagicMock,
         tmp_path: Path,
     ) -> None:
         """Test call to rpm_verifier.py main function"""
         status_path = tmp_path / "status"
         results_path = tmp_path / "results"
+        images_processed_path: Path = tmp_path / "images_processed"
         fail_unsigned = False
         set_output_and_status_mock = create_set_output_and_status_mock(
             with_failures=False
@@ -1100,12 +1218,21 @@ class TestMain:
 
         assert status_path.read_text() == "ERROR"
         assert results_path.read_text() == json.dumps({"error": "error"})
+        assert images_processed_path.read_text() == json.dumps(
+            {
+                "image": {
+                    "pullspec": "quay.io/test/image:tag",
+                    "digests": ["sha256:1234567890"],
+                }
+            }
+        )
         mock_inspect_image_ref.assert_called_once()
         mock_get_images_from_inspection.assert_not_called()
         mock_image_processor.assert_not_called()
         set_output_and_status_mock.assert_not_called()
         mock_generate_image_output.assert_called_once()
         mock_aggregate_results.assert_not_called()
+        mock_generate_images_processed_result.assert_not_called()
 
     def test_main_get_images_from_inspection_exception(  # pylint: disable=too-many-arguments
         self,
@@ -1115,11 +1242,14 @@ class TestMain:
         create_set_output_and_status_mock: MagicMock,
         mock_generate_image_output: MagicMock,
         mock_aggregate_results: MagicMock,
+        mock_generate_images_processed_result: MagicMock,
         tmp_path: Path,
     ) -> None:
         """Test call to rpm_verifier.py main function"""
         status_path = tmp_path / "status"
         results_path = tmp_path / "results"
+        images_processed_path: Path = tmp_path / "images_processed"
+
         fail_unsigned = False
         set_output_and_status_mock = create_set_output_and_status_mock(
             with_failures=False
@@ -1145,9 +1275,18 @@ class TestMain:
 
         assert status_path.read_text() == "ERROR"
         assert results_path.read_text() == json.dumps({"error": "error"})
+        assert images_processed_path.read_text() == json.dumps(
+            {
+                "image": {
+                    "pullspec": "quay.io/test/image:tag",
+                    "digests": ["sha256:1234567890"],
+                }
+            }
+        )
         mock_inspect_image_ref.assert_called_once()
         mock_get_images_from_inspection.assert_called_once()
         mock_image_processor.assert_not_called()
         set_output_and_status_mock.assert_not_called()
         mock_generate_image_output.assert_called_once()
         mock_aggregate_results.assert_not_called()
+        mock_generate_images_processed_result.assert_not_called()
