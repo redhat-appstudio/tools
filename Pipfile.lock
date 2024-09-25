@@ -482,9 +482,10 @@
                 "client"
             ],
             "hashes": [
-                "sha256:2910f002acc52f851c761798bb4448daaa0ced85b80a448891ac171a0b016c8a"
+                "sha256:bf91cd84a43d63c556c56ac18183ebf3d3bfd463b86567831deb642da26c3502"
             ],
-            "version": "==0.8.0"
+            "index": "pypi",
+            "version": "==0.8.1"
         },
         "opentelemetry-api": {
             "hashes": [
