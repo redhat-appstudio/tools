@@ -233,6 +233,26 @@ def aggregate_results(processed_image_list: list[ProcessedImage]) -> dict[str, A
     return aggregated_results
 
 
+def generate_processed_image_digests(
+    processed_images: list[ProcessedImage], image_url: str, image_digest: str
+) -> dict[str, Any]:
+    """
+    Generate a dictionary containing the list of digests of the processed images.
+    If the image reference provided is of an Image Manifest, this list will contain one digest.
+    If it was an Image Index, then the result will contain the digest of the Image Index and a
+    digest for each of the Image Manifests listed in the processed_images argument.
+    :param processed_images: a list pf processed images
+    :param image_url: Image URL of the image reference
+    :param image_digest: Image digest of the image reference
+    :return: Dictionary with the list of digests processed
+    """
+    # set unique values in case image_digest is also the image processed
+    digests_set = set(
+        [image_digest] + [image.image.split("@")[-1] for image in processed_images]
+    )
+    return {"image": {"pullspec": image_url, "digests": list(digests_set)}}
+
+
 @dataclass(frozen=True)
 class ImageProcessor:
     """
@@ -319,8 +339,10 @@ def main(  # pylint: disable=too-many-locals
     """Verify RPMs are signed"""
     status_path: Path = workdir / "status"
     results_path: Path = workdir / "results"
+    images_processed_path: Path = workdir / "images_processed"
 
-    # Exit in case of failure to process the image reference
+    # Exit in case of failure to process the image reference,
+    # Create the result and the images processed and write them
     try:
         process = inspect_image_ref(image_url=image_url, image_digest=image_digest)
         images = get_images_from_inspection(
@@ -333,10 +355,26 @@ def main(  # pylint: disable=too-many-locals
         status_path.write_text("ERROR")
         results_path.write_text(json.dumps(result))
 
+        images_processed: dict[str, Any] = {
+            "image": {"pullspec": image_url, "digests": [image_digest]}
+        }
+        images_processed_path.write_text(json.dumps(images_processed))
         if fail_unsigned:
-            sys.exit(f"{out}\n{json.dumps(result)}")
+            sys.exit(
+                f"{out}\n"
+                f"Final results:\n"
+                f"{json.dumps(result)}\n"
+                f"Images processed:\n"
+                f"{images_processed}"
+            )
         else:
-            print(f"{out}\n{json.dumps(result)}")
+            print(
+                f"{out}\n"
+                f"Final results:\n"
+                f"{json.dumps(result)}\n"
+                f"Images processed:\n"
+                f"{images_processed}"
+            )
             sys.exit(0)
 
     processor = ImageProcessor(workdir=workdir)
@@ -348,13 +386,33 @@ def main(  # pylint: disable=too-many-locals
     )
     aggregated_results = aggregate_results(processed_image_list=processed_images_list)
     results_path.write_text(json.dumps(aggregated_results))
+
+    images_processed = generate_processed_image_digests(
+        processed_images=processed_images_list,
+        image_url=image_url,
+        image_digest=image_digest,
+    )
+    images_processed_path.write_text(json.dumps(images_processed))
+
     if failures_occurred:
         status_path.write_text("ERROR")
     else:
         status_path.write_text("SUCCESS")
     if failures_occurred and fail_unsigned:
-        sys.exit(f"{output}\nFinal results:\n{json.dumps(aggregated_results)}")
-    print(f"{output}\nFinal results:\n{json.dumps(aggregated_results)}")
+        sys.exit(
+            f"{output}\n"
+            f"Final results:\n"
+            f"{json.dumps(aggregated_results)}\n"
+            f"Images processed:\n"
+            f"{json.dumps(images_processed)}"
+        )
+    print(
+        f"{output}\n"
+        f"Final results:\n"
+        f"{json.dumps(aggregated_results)}\n"
+        f"Images processed:\n"
+        f"{json.dumps(images_processed)}"
+    )
 
 
 if __name__ == "__main__":
