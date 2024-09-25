@@ -1,6 +1,8 @@
 """Test rpm_verifier.py end-to-end"""
 
 # pylint: disable=too-many-lines
+
+import json
 from pathlib import Path
 from subprocess import CalledProcessError, run
 from textwrap import dedent
@@ -14,6 +16,7 @@ from verify_rpms import rpm_verifier
 from verify_rpms.rpm_verifier import (
     ImageProcessor,
     ProcessedImage,
+    aggregate_results,
     generate_image_output,
     generate_image_results,
     get_images_from_inspection,
@@ -514,6 +517,86 @@ def test_set_output_and_status(
     assert out == f"{expected_output}\n"
 
 
+@pytest.mark.parametrize(
+    ("processed_image_list", "expected_output"),
+    [
+        pytest.param(
+            [
+                ProcessedImage(
+                    image="image1",
+                    signed_rpms_keys=["123", "456"],
+                    unsigned_rpms=[],
+                    error="",
+                    output="image1 output",
+                    results={},
+                ),
+                ProcessedImage(
+                    image="image2",
+                    signed_rpms_keys=["123", "654"],
+                    unsigned_rpms=[],
+                    error="",
+                    output="image2 output",
+                    results={},
+                ),
+            ],
+            {"keys": {"123": 2, "456": 1, "654": 1, "unsigned": 0}},
+            id="no errors, no unsigned",
+        ),
+        pytest.param(
+            [
+                ProcessedImage(
+                    image="image1",
+                    signed_rpms_keys=["123", "456"],
+                    unsigned_rpms=["unsigned1", "unsigned2"],
+                    error="",
+                    output="image1 output",
+                    results={},
+                ),
+                ProcessedImage(
+                    image="image2",
+                    signed_rpms_keys=["123", "654"],
+                    unsigned_rpms=["unsigned1"],
+                    error="",
+                    output="image2 output",
+                    results={},
+                ),
+            ],
+            {"keys": {"123": 2, "456": 1, "654": 1, "unsigned": 3}},
+            id="no errors, with unsigned",
+        ),
+        pytest.param(
+            [
+                ProcessedImage(
+                    image="image1",
+                    signed_rpms_keys=["123", "456"],
+                    unsigned_rpms=["unsigned1", "unsigned2"],
+                    error="",
+                    output="image1 output",
+                    results={},
+                ),
+                ProcessedImage(
+                    image="image2",
+                    signed_rpms_keys=["123", "654"],
+                    unsigned_rpms=["unsigned1"],
+                    error="This is an error",
+                    output="image2 output",
+                    results={},
+                ),
+            ],
+            {"error": "This is an error"},
+            id="with error",
+        ),
+    ],
+)
+def test_aggregate_results(
+    processed_image_list: list[ProcessedImage],
+    expected_output: dict[str, Any],
+) -> None:
+    """Test aggregate_results"""
+    result = aggregate_results(processed_image_list=processed_image_list)
+    assert result == expected_output
+
+
 class TestImageProcessor:
     """Test ImageProcessor's callable"""
 
@@ -794,6 +877,15 @@ class TestMain:
         return mock
 
     @pytest.fixture()
+    def mock_aggregate_results(self, monkeypatch: MonkeyPatch) -> MagicMock:
+        """Mock aggregate_results"""
+        mock: MagicMock = create_autospec(
+            aggregate_results, return_value={"results": "res"}
+        )
+        monkeypatch.setattr(rpm_verifier, aggregate_results.__name__, mock)
+        return mock
+
+    @pytest.fixture()
     def mock_inspect_image_ref(self, monkeypatch: MonkeyPatch) -> MagicMock:
         """Mock inspect_image_ref"""
         mock: MagicMock = create_autospec(
@@ -854,6 +946,16 @@ class TestMain:
 
         return _mock_set_output_and_status
 
+    @pytest.fixture()
+    def mock_generate_image_output(self, monkeypatch: MonkeyPatch) -> MagicMock:
+        """Mock get_images_from_inspection"""
+        mock: MagicMock = create_autospec(
+            generate_image_output,
+            return_value=MagicMock(return_value="some output"),
+        )
+        monkeypatch.setattr(rpm_verifier, generate_image_output.__name__, mock)
+        return mock
+
     @pytest.mark.parametrize(
         ("fail_unsigned", "has_errors"),
         [
@@ -876,12 +978,14 @@ class TestMain:
         mock_inspect_image_ref: MagicMock,
         mock_get_images_from_inspection: MagicMock,
         create_set_output_and_status_mock: MagicMock,
+        mock_aggregate_results: MagicMock,
         fail_unsigned: bool,
         has_errors: bool,
         tmp_path: Path,
     ) -> None:
         """Test call to rpm_verifier.py main function"""
         status_path = tmp_path / "status"
+        results_path = tmp_path / "results"
         set_output_and_status_mock = create_set_output_and_status_mock(
             with_failures=has_errors
         )
@@ -903,10 +1007,14 @@ class TestMain:
             assert status_path.read_text() == "ERROR"
         else:
             assert status_path.read_text() == "SUCCESS"
+        assert results_path.read_text() == json.dumps(
+            mock_aggregate_results.return_value
+        )
         mock_inspect_image_ref.assert_called_once()
         mock_get_images_from_inspection.assert_called_once()
         mock_image_processor.assert_called_once_with(tmp_path)
         set_output_and_status_mock.assert_called_once()
+        mock_aggregate_results.assert_called_once()
 
     def test_main_fail_on_unsigned_rpm_or_errors(  # pylint: disable=too-many-arguments
         self,
@@ -914,12 +1022,14 @@ class TestMain:
         mock_image_processor: MagicMock,  # pylint: disable=unused-argument
         mock_inspect_image_ref: MagicMock,
         mock_get_images_from_inspection: MagicMock,
+        mock_aggregate_results: MagicMock,
         tmp_path: Path,
     ) -> None:
         """Test call to rpm_verifier.py main function fails
         when whe 'fail-unsigned' flag is used and there are unsigned RPMs
         """
         status_path = tmp_path / "status"
+        results_path = tmp_path / "results"
         fail_unsigned: bool = True
         set_output_and_status_mock = create_set_output_and_status_mock(
             with_failures=True
@@ -941,9 +1051,16 @@ class TestMain:
                 standalone_mode=False,
             )
         assert status_path.read_text() == "ERROR"
+        assert results_path.read_text() == json.dumps(
+            mock_aggregate_results.return_value
+        )
         mock_image_processor.assert_called_once_with(tmp_path)
         set_output_and_status_mock.assert_called_once()
-        assert err.value.code == f"{set_output_and_status_mock.return_value[0]}"
+
+        assert (
+            err.value.code == f"{set_output_and_status_mock.return_value[0]}\n"
+            f"Final results:\n{json.dumps(mock_aggregate_results.return_value)}"
+        )
 
     def test_main_inspect_image_ref_exception(  # pylint: disable=too-many-arguments
         self,
@@ -951,10 +1068,13 @@ class TestMain:
         mock_inspect_image_ref: MagicMock,
         mock_get_images_from_inspection: MagicMock,
         create_set_output_and_status_mock: MagicMock,
+        mock_generate_image_output: MagicMock,
+        mock_aggregate_results: MagicMock,
         tmp_path: Path,
     ) -> None:
         """Test call to rpm_verifier.py main function"""
         status_path = tmp_path / "status"
+        results_path = tmp_path / "results"
         fail_unsigned = False
         set_output_and_status_mock = create_set_output_and_status_mock(
             with_failures=False
@@ -979,10 +1099,13 @@ class TestMain:
             )
 
         assert status_path.read_text() == "ERROR"
+        assert results_path.read_text() == json.dumps({"error": "error"})
         mock_inspect_image_ref.assert_called_once()
         mock_get_images_from_inspection.assert_not_called()
         mock_image_processor.assert_not_called()
         set_output_and_status_mock.assert_not_called()
+        mock_generate_image_output.assert_called_once()
+        mock_aggregate_results.assert_not_called()
 
     def test_main_get_images_from_inspection_exception(  # pylint: disable=too-many-arguments
         self,
@@ -990,10 +1113,13 @@ class TestMain:
         mock_inspect_image_ref: MagicMock,
         mock_get_images_from_inspection: MagicMock,
         create_set_output_and_status_mock: MagicMock,
+        mock_generate_image_output: MagicMock,
+        mock_aggregate_results: MagicMock,
         tmp_path: Path,
     ) -> None:
         """Test call to rpm_verifier.py main function"""
         status_path = tmp_path / "status"
+        results_path = tmp_path / "results"
         fail_unsigned = False
         set_output_and_status_mock = create_set_output_and_status_mock(
             with_failures=False
@@ -1018,7 +1144,10 @@ class TestMain:
             )
 
         assert status_path.read_text() == "ERROR"
+        assert results_path.read_text() == json.dumps({"error": "error"})
         mock_inspect_image_ref.assert_called_once()
         mock_get_images_from_inspection.assert_called_once()
         mock_image_processor.assert_not_called()
         set_output_and_status_mock.assert_not_called()
+        mock_generate_image_output.assert_called_once()
+        mock_aggregate_results.assert_not_called()
