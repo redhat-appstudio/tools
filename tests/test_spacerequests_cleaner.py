@@ -273,7 +273,7 @@ class TestMain:
         monkeypatch.setattr(spacerequests_cleaner, "client", mock)
         return mock
 
-    def test_main(  # pylint: disable=too-many-arguments
+    def test_main(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
         load_config_mock: MagicMock,
         get_tenant_namespaces_mock: MagicMock,
