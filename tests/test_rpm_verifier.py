@@ -470,8 +470,8 @@ def test_get_images_from_inspection(
          ====================================
          """
             ).strip(),
-            True,
-            id="no errors, image with unsigned",
+            False,
+            id="no errors, image with unsigned, should not expect failure",
         ),
         pytest.param(
             [
@@ -503,7 +503,7 @@ def test_get_images_from_inspection(
          """
             ).strip(),
             True,
-            id="image with error",
+            id="image with error, should expect failure",
         ),
     ],
 )
@@ -1060,22 +1060,6 @@ class TestMain:
         monkeypatch.setattr(rpm_verifier, generate_image_output.__name__, mock)
         return mock
 
-    @pytest.mark.parametrize(
-        ("fail_unsigned", "has_errors"),
-        [
-            pytest.param(
-                False,
-                False,
-                id="Should pass if there are errors, and there are errors.",
-            ),
-            pytest.param(
-                False, True, id="Should pass if there are errors, and there are none."
-            ),
-            pytest.param(
-                True, False, id="Should fail if there are errors, and there are none."
-            ),
-        ],
-    )
     def test_main(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
         mock_image_processor: MagicMock,
@@ -1084,8 +1068,6 @@ class TestMain:
         create_set_output_and_status_mock: MagicMock,
         mock_aggregate_results: MagicMock,
         mock_generate_images_processed_result: MagicMock,
-        fail_unsigned: bool,
-        has_errors: bool,
         tmp_path: Path,
     ) -> None:
         """Test call to rpm_verifier.py main function"""
@@ -1094,26 +1076,22 @@ class TestMain:
         images_processed_path: Path = tmp_path / "images_processed"
 
         set_output_and_status_mock = create_set_output_and_status_mock(
-            with_failures=has_errors
+            with_failures=False
         )
+
         rpm_verifier.main(  # pylint: disable=no-value-for-parameter
             args=[
                 "--image-url",
                 "quay.io/test/image:tag",
                 "--image-digest",
                 "sha256:1234567890",
-                "--fail-unsigned",
-                fail_unsigned,
                 "--workdir",
                 tmp_path,
             ],
             obj={},
             standalone_mode=False,
         )
-        if has_errors:
-            assert status_path.read_text() == "ERROR"
-        else:
-            assert status_path.read_text() == "SUCCESS"
+        assert status_path.read_text() == "SUCCESS"
         assert results_path.read_text() == json.dumps(
             mock_aggregate_results.return_value
         )
@@ -1127,7 +1105,7 @@ class TestMain:
         mock_aggregate_results.assert_called_once()
         mock_generate_images_processed_result.assert_called_once()
 
-    def test_main_fail_on_unsigned_rpm_or_errors(
+    def test_main_fail_with_errors(
         # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
         create_set_output_and_status_mock: MagicMock,
@@ -1145,7 +1123,6 @@ class TestMain:
         results_path = tmp_path / "results"
         images_processed_path: Path = tmp_path / "images_processed"
 
-        fail_unsigned: bool = True
         set_output_and_status_mock = create_set_output_and_status_mock(
             with_failures=True
         )
@@ -1157,8 +1134,6 @@ class TestMain:
                     "quay.io/test/image:tag",
                     "--image-digest",
                     "sha256:1234567890",
-                    "--fail-unsigned",
-                    fail_unsigned,
                     "--workdir",
                     tmp_path,
                 ],
@@ -1199,7 +1174,6 @@ class TestMain:
         status_path = tmp_path / "status"
         results_path = tmp_path / "results"
         images_processed_path: Path = tmp_path / "images_processed"
-        fail_unsigned = False
         set_output_and_status_mock = create_set_output_and_status_mock(
             with_failures=False
         )
@@ -1213,8 +1187,6 @@ class TestMain:
                     "quay.io/test/image:tag",
                     "--image-digest",
                     "sha256:1234567890",
-                    "--fail-unsigned",
-                    fail_unsigned,
                     "--workdir",
                     tmp_path,
                 ],
@@ -1257,7 +1229,6 @@ class TestMain:
         results_path = tmp_path / "results"
         images_processed_path: Path = tmp_path / "images_processed"
 
-        fail_unsigned = False
         set_output_and_status_mock = create_set_output_and_status_mock(
             with_failures=False
         )
@@ -1271,8 +1242,6 @@ class TestMain:
                     "quay.io/test/image:tag",
                     "--image-digest",
                     "sha256:1234567890",
-                    "--fail-unsigned",
-                    fail_unsigned,
                     "--workdir",
                     tmp_path,
                 ],

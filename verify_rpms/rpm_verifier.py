@@ -206,7 +206,7 @@ def set_output_and_status(
     failures_occurred = False
     for img in processed_image_list:
         output += f"{img.output}\n{img.results}\n====================================\n"
-        if img.error != "" or img.unsigned_rpms:
+        if img.error != "":
             failures_occurred = True
     return output, failures_occurred
 
@@ -319,12 +319,6 @@ class ImageProcessor:
     required=True,
 )
 @click.option(
-    "--fail-unsigned",
-    help="Exit with failure if unsigned RPMs or other errors were found",
-    type=bool,
-    required=True,
-)
-@click.option(
     "--workdir",
     help="Path in which temporary directories will be created",
     type=click.Path(path_type=Path),
@@ -333,7 +327,6 @@ class ImageProcessor:
 def main(  # pylint: disable=too-many-locals
     image_url: str,
     image_digest: str,
-    fail_unsigned: bool,
     workdir: Path,
 ) -> None:
     """Verify RPMs are signed"""
@@ -359,23 +352,15 @@ def main(  # pylint: disable=too-many-locals
             "image": {"pullspec": image_url, "digests": [image_digest]}
         }
         images_processed_path.write_text(json.dumps(images_processed))
-        if fail_unsigned:
-            sys.exit(
-                f"{out}\n"
-                f"Final results:\n"
-                f"{json.dumps(result)}\n"
-                f"Images processed:\n"
-                f"{images_processed}"
-            )
-        else:
-            print(
-                f"{out}\n"
-                f"Final results:\n"
-                f"{json.dumps(result)}\n"
-                f"Images processed:\n"
-                f"{images_processed}"
-            )
-            sys.exit(0)
+
+        # Exit with error in case of failure to inspect the image
+        sys.exit(
+            f"{out}\n"
+            f"Final results:\n"
+            f"{json.dumps(result)}\n"
+            f"Images processed:\n"
+            f"{images_processed}"
+        )
 
     processor = ImageProcessor(workdir=workdir)
     with ThreadPoolExecutor() as executor:
@@ -396,9 +381,6 @@ def main(  # pylint: disable=too-many-locals
 
     if failures_occurred:
         status_path.write_text("ERROR")
-    else:
-        status_path.write_text("SUCCESS")
-    if failures_occurred and fail_unsigned:
         sys.exit(
             f"{output}\n"
             f"Final results:\n"
@@ -406,13 +388,15 @@ def main(  # pylint: disable=too-many-locals
             f"Images processed:\n"
             f"{json.dumps(images_processed)}"
         )
-    print(
-        f"{output}\n"
-        f"Final results:\n"
-        f"{json.dumps(aggregated_results)}\n"
-        f"Images processed:\n"
-        f"{json.dumps(images_processed)}"
-    )
+    else:
+        status_path.write_text("SUCCESS")
+        print(
+            f"{output}\n"
+            f"Final results:\n"
+            f"{json.dumps(aggregated_results)}\n"
+            f"Images processed:\n"
+            f"{json.dumps(images_processed)}"
+        )
 
 
 if __name__ == "__main__":
