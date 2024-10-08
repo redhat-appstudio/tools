@@ -13,7 +13,7 @@ metadata:
     appstudio.openshift.io/component: tools
     pipelines.appstudio.openshift.io/type: build
   name: tools-on-push
-  namespace: rhtap-o11y-tenant
+  namespace: konflux-vanguard-tenant
 spec:
   params:
   - name: dockerfile
@@ -21,7 +21,7 @@ spec:
   - name: git-url
     value: '{{repo_url}}'
   - name: output-image
-    value: quay.io/redhat-user-workloads/rhtap-o11y-tenant/tools/tools:{{revision}}
+    value: quay.io/redhat-user-workloads/konflux-vanguard-tenant/tools/tools:{{revision}}
   - name: path-context
     value: .
   - name: revision
