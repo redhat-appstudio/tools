@@ -70,7 +70,10 @@ def get_rpms_data(rpmdb: Path, runner: Callable = run) -> list[str]:
             "rpm",
             "-qa",
             "--qf",
-            "%{NAME}-%{VERSION}-%{RELEASE} %{SIGPGP:pgpsig}\n",
+            (
+                "%{NAME}-%{VERSION}-%{RELEASE} "
+                + "%|DSAHEADER?{%{DSAHEADER:pgpsig}}:{%|RSAHEADER?{%{RSAHEADER:pgpsig}}:{(none)}|}|\n"  # pylint: disable=line-too-long
+            ),
             "--dbpath",
             str(rpmdb),
         ],

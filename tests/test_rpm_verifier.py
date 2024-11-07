@@ -85,7 +85,10 @@ def test_get_rpms_data(test_input: list[str], expected: list[str]) -> None:
         "rpm",
         "-qa",
         "--qf",
-        "%{NAME}-%{VERSION}-%{RELEASE} %{SIGPGP:pgpsig}\n",
+        (
+            "%{NAME}-%{VERSION}-%{RELEASE} "
+            + "%|DSAHEADER?{%{DSAHEADER:pgpsig}}:{%|RSAHEADER?{%{RSAHEADER:pgpsig}}:{(none)}|}|\n"
+        ),
         "--dbpath",
         "rpmdb_folder",
     ]
