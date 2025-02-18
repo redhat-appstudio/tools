@@ -18,9 +18,8 @@ ADD . /tmp/src
 ADD --chown=root:root --chmod=644 data/ca-trust/* /etc/pki/ca-trust/source/anchors
 RUN /usr/bin/fix-permissions /tmp/src \
     && /usr/bin/update-ca-trust
-RUN yum install -y krb5-workstation skopeo
+RUN yum install -y skopeo
 RUN curl -L https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-COPY data/kerberos/krb5.conf /etc
 
 USER 1001
 
