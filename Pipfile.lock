@@ -30,12 +30,12 @@
         },
         "authlib": {
             "hashes": [
-                "sha256:8fd8bd8f806485a532ac39a17b579982cf54688f956174f995cc938a91725423",
-                "sha256:b3cc5ccfc19cf87678046b6e7cb19d402d8a631a33c40e36385232203227953a"
+                "sha256:5cbc85ecb0667312c1cdc2f9095680bb735883b123fb509fde1e65b1c5df972e",
+                "sha256:8408861cbd9b4ea2ff759b00b6f02fd7d81ac5a56d0b2b22c08606c6049aae11"
             ],
             "index": "pypi",
             "markers": "python_version >= '3.9'",
-            "version": "==1.5.0"
+            "version": "==1.5.1"
         },
         "black": {
             "hashes": [
